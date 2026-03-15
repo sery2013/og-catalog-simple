@@ -5,3 +5,4 @@ httpx==0.26.0
 python-multipart==0.0.6
 psycopg2-binary==2.9.9          # ← ДОБАВИТЬ ЭТУ СТРОКУ
 sqlalchemy==2.0.25               # ← ДОБАВИТЬ ЭТУ СТРОКУ
+apscheduler==3.10.4
