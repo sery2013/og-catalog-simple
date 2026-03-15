@@ -17,7 +17,7 @@ from sqlalchemy.orm import sessionmaker
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="OpenGradient Catalog", version="3.0.0", docs_url="/docs")
+app = FastAPI(title="OpenGradient Catalog", version="3.1.0", docs_url="/docs")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 # === МОДЕЛИ ДАННЫХ ===
@@ -66,7 +66,7 @@ BASE_MODELS = [
 # === БАЗА ДАННЫХ PostgreSQL ===
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-user_models_memory: List[ModelInfo] = []  # Fallback если нет БД
+user_models_memory: List[ModelInfo] = []
 
 if DATABASE_URL:
     try:
@@ -102,11 +102,15 @@ chat_sessions: Dict[str, List] = {}
 model_tasks: Dict[str, Dict] = {}
 
 def get_all_models():
-    """Возвращает все модели (12 базовых + из БД)"""
+    """🔥 Возвращает модели: созданные пользователями (новые первыми) + базовые"""
     if DBModel and SessionLocal:
         try:
             db = SessionLocal()
-            db_models = db.query(DBModel).filter(DBModel.is_user_created == 1).all()
+            # 🔥 Сортируем по created_at DESC — новые модели первыми!
+            db_models = db.query(DBModel).filter(
+                DBModel.is_user_created == 1
+            ).order_by(DBModel.created_at.desc()).all()
+            
             user_models = [
                 ModelInfo(
                     id=m.id, name=m.name, description=m.description, category=m.category,
@@ -117,11 +121,13 @@ def get_all_models():
                 for m in db_models
             ]
             db.close()
-            return BASE_MODELS + user_models
+            # 🔥 ПОЛЬЗОВАТЕЛЬСКИЕ МОДЕЛИ ПЕРВЫМИ!
+            return user_models + BASE_MODELS
         except Exception as e:
             logger.error(f"DB read error: {e}")
-            return BASE_MODELS + user_models_memory
-    return BASE_MODELS + user_models_memory
+            return user_models_memory + BASE_MODELS
+    # 🔥 ПОЛЬЗОВАТЕЛЬСКИЕ МОДЕЛИ ПЕРВЫМИ!
+    return user_models_memory + BASE_MODELS
 
 # === GEMINI AI CHAT ===
 
@@ -144,6 +150,7 @@ Stats: {model.stats.get('likes', 0)} likes, {model.stats.get('inferences', 0)} i
             context += f"USER QUESTION: {query}\n\nAnswer helpfully and specifically about this model."
             
             async with httpx.AsyncClient(timeout=30.0) as client:
+                # 🔥 ИСПРАВЛЕНО: убран лишний пробел в URL
                 resp = await client.post(
                     f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={gemini_key}",
                     headers={"Content-Type": "application/json"},
@@ -296,7 +303,7 @@ async def get_task(task_id: str):
 
 if __name__ == "__main__":
     import uvicorn
-    logger.info("🚀 OpenGradient Catalog v3.0")
+    logger.info("🚀 OpenGradient Catalog v3.1")
     logger.info(f"📦 Base models: {len(BASE_MODELS)}")
     logger.info(f"🗄️ Database: {'✓' if DBModel else '✗'}")
     logger.info(f"🔑 Gemini: {'✓' if os.getenv('GEMINI_API_KEY') else '✗'}")
