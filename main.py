@@ -7,12 +7,11 @@ from datetime import datetime
 import logging
 import httpx
 import os
-import json
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="OpenGradient Catalog", version="2.0.0", docs_url="/docs")
+app = FastAPI(title="OpenGradient Catalog", version="2.1.0", docs_url="/docs")
 
 app.add_middleware(
     CORSMiddleware,
@@ -22,7 +21,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# === МОДЕЛИ ===
+# === МОДЕЛИ ДАННЫХ ===
 
 class ModelInfo(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
@@ -48,11 +47,7 @@ class CreateModelRequest(BaseModel):
     base_model: Optional[str] = None
     wallet_key: Optional[str] = None
 
-# === КЭШ ===
-models_cache = []
-cache_timestamp = None
-
-# === ТЕСТОВЫЕ МОДЕЛИ ===
+# === ТЕСТОВЫЕ МОДЕЛИ (12 штук) ===
 def get_test_models():
     return [
         ModelInfo(id="og-1hr-volatility-ethusdt", name="ETH/USDT 1hr Volatility", description="Real-time ETH/USDT volatility forecasting model trained on 1-hour OHLCV data", category="Risk", tags=["defi", "prediction", "timeseries", "ethereum"], stats={"likes": 42, "inferences": 1287}),
@@ -69,143 +64,69 @@ def get_test_models():
         ModelInfo(id="og-portfolio-advisor", name="DeFi Portfolio Advisor", description="AI advisor for DeFi portfolio optimization and risk management", category="Language", tags=["defi", "portfolio", "advisor", "optimization"], stats={"likes": 156, "inferences": 4320}),
     ]
 
-# === AI CHAT ===
+# === ХРАНИЛИЩА ===
 chat_sessions: Dict[str, List] = {}
+model_tasks: Dict[str, Dict] = {}
+
+# === AI CHAT С GEMINI ===
 
 async def generate_ai_response(query: str, model_info: Optional[ModelInfo] = None) -> str:
-    """Генерируем ответ с Gemini API"""
-    
     gemini_key = os.getenv("GEMINI_API_KEY")
-    openai_key = os.getenv("OPENAI_API_KEY")
     
-    logger.info(f"API Keys - Gemini: {'✓' if gemini_key else '✗'}, OpenAI: {'✓' if openai_key else '✗'}")
-    
-    # Пробуем Gemini
-    if gemini_key:
+    # Пробуем Gemini API
+    if gemini_key and gemini_key.startswith("AIza"):
         try:
-            context = f"""You are an AI assistant for OpenGradient Model Hub.
-You help users understand AI models for blockchain and DeFi.
-
-"""
+            context = f"You are an AI assistant for OpenGradient Model Hub.\n"
             if model_info:
-                context += f"""Current model:
-- Name: {model_info.name}
-- Category: {model_info.category}
-- Description: {model_info.description}
-- Tags: {', '.join(model_info.tags)}
-- Stats: {model_info.stats.get('likes', 0)} likes, {model_info.stats.get('inferences', 0)} inferences
-
-"""
-            context += f"""User question: {query}
-
-Provide a helpful, concise answer."""
-
+                context += f"Model: {model_info.name} ({model_info.category})\nDescription: {model_info.description}\nTags: {', '.join(model_info.tags)}\n"
+            context += f"User question: {query}\n\nAnswer concisely and helpfully."
+            
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
                     f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={gemini_key}",
                     headers={"Content-Type": "application/json"},
                     json={"contents": [{"parts": [{"text": context}]}]}
                 )
-                
                 if response.status_code == 200:
                     data = response.json()
-                    answer = data['candidates'][0]['content']['parts'][0]['text'].strip()
-                    logger.info(f"✓ Gemini response: {answer[:100]}...")
-                    return answer
-                else:
-                    logger.error(f"✗ Gemini API error: {response.status_code} - {response.text}")
-                    
+                    return data['candidates'][0]['content']['parts'][0]['text'].strip()
         except Exception as e:
-            logger.error(f"✗ Gemini exception: {e}")
+            logger.error(f"Gemini error: {e}")
     
-    # Пробуем OpenAI
-    if openai_key:
-        try:
-            context = f"You are an AI assistant for OpenGradient Model Hub.\n"
-            if model_info:
-                context += f"Model: {model_info.name} ({model_info.category}) - {model_info.description}\n"
-            context += f"User: {query}"
-            
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    "https://api.openai.com/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {openai_key}",
-                        "Content-Type": "application/json"
-                    },
-                    json={
-                        "model": "gpt-3.5-turbo",
-                        "messages": [
-                            {"role": "system", "content": context},
-                            {"role": "user", "content": query}
-                        ],
-                        "max_tokens": 500
-                    }
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    answer = data['choices'][0]['message']['content'].strip()
-                    logger.info(f"✓ OpenAI response: {answer[:100]}...")
-                    return answer
-                else:
-                    logger.error(f"✗ OpenAI API error: {response.status_code}")
-                    
-        except Exception as e:
-            logger.error(f"✗ OpenAI exception: {e}")
-    
-    # Fallback — умные шаблонные ответы
-    logger.info("Using template response (no API keys or API failed)")
+    # Fallback на шаблонные ответы
     return generate_template_response(query, model_info)
 
 def generate_template_response(query: str, model_info: Optional[ModelInfo]) -> str:
-    """Умные шаблонные ответы"""
     q = query.lower()
-    
     if model_info:
-        if any(w in q for w in ["how", "work", "architecture", "technical"]):
-            return f"**{model_info.name}** uses advanced ML techniques optimized for {model_info.category}.\n\n**Key Features:**\n• Trained on real blockchain data\n• Optimized for ONNX runtime\n• Tags: {', '.join(model_info.tags)}\n\n**Performance:**\n👍 {model_info.stats.get('likes', 0)} likes\n🔄 {model_info.stats.get('inferences', 0)} inferences"
-        
-        elif any(w in q for w in ["use", "deploy", "run", "install"]):
-            return f"To use **{model_info.name}**:\n\n1. Download model files\n2. Install ONNX runtime: `pip install onnxruntime`\n3. Load the model\n4. Send input data\n5. Get predictions\n\nReady for production!"
-        
-        elif any(w in q for w in ["accuracy", "performance", "metric", "score"]):
-            return f"**{model_info.name}** Metrics:\n\n• Rating: {model_info.stats.get('likes', 0)} likes\n• Usage: {model_info.stats.get('inferences', 0)} inferences\n• Category: {model_info.category}\n\nActively used in production."
-        
+        if any(w in q for w in ["how", "work", "architecture"]):
+            return f"**{model_info.name}** uses advanced ML for {model_info.category}.\n\n**Features:**\n• Blockchain-trained\n• ONNX-optimized\n• Tags: {', '.join(model_info.tags)}\n\n**Stats:** 👍 {model_info.stats.get('likes',0)} | 🔄 {model_info.stats.get('inferences',0)}"
+        elif any(w in q for w in ["use", "deploy", "run"]):
+            return f"To use **{model_info.name}**:\n1. Download files\n2. `pip install onnxruntime`\n3. Load model\n4. Send input\n5. Get predictions\n\nReady for production!"
         else:
-            return f"**{model_info.name}**\n\n📋 {model_info.description}\n\n🏷️ Category: {model_info.category}\n🔖 Tags: {', '.join(model_info.tags)}\n📊 Stats: {model_info.stats.get('likes', 0)} likes, {model_info.stats.get('inferences', 0)} inferences\n\nWhat else?"
-    else:
-        return "👋 I can help you:\n• Find the right model\n• Understand capabilities\n• Deploy on-chain\n\nSelect a model to chat!"
+            return f"**{model_info.name}**\n\n📋 {model_info.description}\n🏷️ {model_info.category}\n🔖 {', '.join(model_info.tags)}\n📊 {model_info.stats.get('likes',0)} likes\n\nWhat else?"
+    return "👋 Select a model to chat about it!"
 
 # === СОЗДАНИЕ МОДЕЛЕЙ ===
-model_tasks: Dict[str, Dict] = {}
 
 async def process_model_creation(task_id: str, request: CreateModelRequest):
-    """Фоновая задача"""
     import asyncio
-    
     try:
         model_tasks[task_id]["status"] = "processing"
         model_tasks[task_id]["progress"] = 25
         await asyncio.sleep(1)
-        
         model_tasks[task_id]["progress"] = 50
         await asyncio.sleep(1)
-        
         model_tasks[task_id]["progress"] = 75
         await asyncio.sleep(1)
-        
         model_tasks[task_id]["status"] = "completed"
         model_tasks[task_id]["progress"] = 100
         model_tasks[task_id]["result"] = {
             "model_id": f"og-{request.name.lower().replace(' ', '-')}",
-            "message": "Model created successfully",
+            "message": "Model created",
             "tx_hash": "0x" + os.urandom(32).hex() if request.wallet_key else None
         }
-        logger.info(f"✓ Task {task_id} completed")
-        
     except Exception as e:
-        logger.error(f"✗ Task {task_id} failed: {e}")
         model_tasks[task_id]["status"] = "failed"
         model_tasks[task_id]["error"] = str(e)
 
@@ -228,14 +149,11 @@ async def health():
 @app.get("/api/models")
 async def list_models(category: Optional[str] = None, search: Optional[str] = None, limit: int = 50):
     models = get_test_models()
-    
     if category and category != 'all':
         models = [m for m in models if m.category.lower() == category.lower()]
-    
     if search:
         s = search.lower()
         models = [m for m in models if s in m.name.lower() or s in m.description.lower() or any(s in t for t in m.tags)]
-    
     return [m.model_dump() for m in models[:limit]]
 
 @app.get("/api/models/{model_id}")
@@ -251,7 +169,6 @@ async def get_categories():
     cats = {}
     for m in models:
         cats[m.category] = cats.get(m.category, 0) + 1
-    
     return {"categories": [{"id": k.lower().replace(" ", "-"), "name": k, "count": v} for k, v in cats.items()]}
 
 @app.get("/api/stats")
@@ -266,22 +183,13 @@ async def get_stats():
 
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
-    logger.info(f"Chat request: model={req.model_id}, query={req.query[:50]}...")
-    
     sid = req.session_id or f"s_{datetime.now().timestamp()}"
-    
-    model_info = None
-    if req.model_id:
-        model_info = next((m for m in get_test_models() if m.id == req.model_id), None)
-        logger.info(f"Model found: {model_info.name if model_info else 'None'}")
-    
+    model_info = next((m for m in get_test_models() if m.id == req.model_id), None) if req.model_id else None
     reply = await generate_ai_response(req.query, model_info)
-    
     if sid not in chat_sessions:
         chat_sessions[sid] = []
     chat_sessions[sid].append({"role": "user", "content": req.query})
     chat_sessions[sid].append({"role": "assistant", "content": reply})
-    
     return {"reply": reply, "session_id": sid}
 
 @app.get("/api/chat/{session_id}")
@@ -290,19 +198,10 @@ async def get_chat(session_id: str):
 
 @app.post("/api/models/create")
 async def create_model(req: CreateModelRequest, bg: BackgroundTasks):
-    logger.info(f"Create model request: {req.name}")
-    
     tid = f"t_{datetime.now().timestamp()}"
-    model_tasks[tid] = {
-        "status": "queued",
-        "progress": 0,
-        "created": datetime.now().isoformat(),
-        "request": req.model_dump()
-    }
-    
+    model_tasks[tid] = {"status": "queued", "progress": 0, "created": datetime.now().isoformat()}
     bg.add_task(process_model_creation, tid, req)
-    
-    return {"task_id": tid, "status": "queued", "message": "Model creation started"}
+    return {"task_id": tid, "status": "queued", "message": "Started"}
 
 @app.get("/api/tasks/{task_id}")
 async def get_task(task_id: str):
@@ -313,7 +212,6 @@ async def get_task(task_id: str):
 
 if __name__ == "__main__":
     import uvicorn
-    logger.info("🚀 Starting OpenGradient Catalog API v2.0")
-    logger.info(f"Gemini API: {'✓' if os.getenv('GEMINI_API_KEY') else '✗'}")
-    logger.info(f"OpenAI API: {'✓' if os.getenv('OPENAI_API_KEY') else '✗'}")
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+    logger.info("🚀 OpenGradient Catalog v2.1")
+    logger.info(f"Gemini: {'✓' if os.getenv('GEMINI_API_KEY') else '✗'}")
+    uvicorn.run("main:app", host="0.0.0.0", port=8000)
