@@ -7,11 +7,17 @@ from datetime import datetime
 import logging
 import httpx
 import os
+import json
+
+# === БАЗА ДАННЫХ ===
+from sqlalchemy import create_engine, Column, String, Integer, JSON
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="OpenGradient Catalog", version="2.3.0", docs_url="/docs")
+app = FastAPI(title="OpenGradient Catalog", version="3.0.0", docs_url="/docs")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 # === МОДЕЛИ ДАННЫХ ===
@@ -57,109 +63,109 @@ BASE_MODELS = [
     ModelInfo(id="og-portfolio-advisor", name="DeFi Portfolio Advisor", description="AI advisor for DeFi portfolio optimization, risk management, and asset allocation", category="Language", tags=["defi", "portfolio", "advisor", "optimization", "risk"], stats={"likes": 156, "inferences": 4320}),
 ]
 
+# === БАЗА ДАННЫХ PostgreSQL ===
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+user_models_memory: List[ModelInfo] = []  # Fallback если нет БД
+
+if DATABASE_URL:
+    try:
+        engine = create_engine(DATABASE_URL)
+        SessionLocal = sessionmaker(bind=engine)
+        Base = declarative_base()
+        
+        class DBModel(Base):
+            __tablename__ = "models"
+            id = Column(String, primary_key=True)
+            name = Column(String)
+            description = Column(String)
+            category = Column(String)
+            tags = Column(JSON)
+            stats = Column(JSON)
+            created_at = Column(String)
+            is_user_created = Column(Integer, default=0)
+        
+        Base.metadata.create_all(bind=engine)
+        logger.info("✅ Database connected")
+    except Exception as e:
+        logger.error(f"❌ Database error: {e}")
+        DBModel = None
+        SessionLocal = None
+else:
+    logger.warning("⚠️ No DATABASE_URL - using memory only")
+    DBModel = None
+    SessionLocal = None
+
 # === ХРАНИЛИЩА ===
 
-user_models: List[ModelInfo] = []  # Сохраняются в памяти
 chat_sessions: Dict[str, List] = {}
 model_tasks: Dict[str, Dict] = {}
 
 def get_all_models():
-    """Возвращает все модели (12 базовых + созданные пользователями)"""
-    return BASE_MODELS + user_models
+    """Возвращает все модели (12 базовых + из БД)"""
+    if DBModel and SessionLocal:
+        try:
+            db = SessionLocal()
+            db_models = db.query(DBModel).filter(DBModel.is_user_created == 1).all()
+            user_models = [
+                ModelInfo(
+                    id=m.id, name=m.name, description=m.description, category=m.category,
+                    tags=m.tags if isinstance(m.tags, list) else json.loads(m.tags) if m.tags else [],
+                    stats=m.stats if isinstance(m.stats, dict) else json.loads(m.stats) if m.stats else {"likes":0,"inferences":0},
+                    created_at=m.created_at
+                )
+                for m in db_models
+            ]
+            db.close()
+            return BASE_MODELS + user_models
+        except Exception as e:
+            logger.error(f"DB read error: {e}")
+            return BASE_MODELS + user_models_memory
+    return BASE_MODELS + user_models_memory
 
 # === GEMINI AI CHAT ===
 
 async def generate_ai_response(query: str, model: Optional[ModelInfo] = None) -> str:
-    """Генерирует ответ через Gemini API"""
-    
     gemini_key = os.getenv("GEMINI_API_KEY")
-    logger.info(f"🔑 Gemini Key: {'✓ FOUND' if gemini_key else '✗ NOT FOUND'}")
     
-    # Пробуем Gemini API
     if gemini_key and gemini_key.startswith("AIza"):
         try:
-            # Формируем контекст с информацией о модели
-            context = f"""You are an AI assistant for OpenGradient Model Hub.
-You help users understand AI models for blockchain and DeFi.
-
-"""
+            context = f"You are an AI assistant for OpenGradient Model Hub.\n\n"
             if model:
-                context += f"""CURRENT MODEL INFORMATION:
-• Name: {model.name}
-• ID: {model.id}
-• Category: {model.category}
-• Description: {model.description}
-• Tags: {', '.join(model.tags)}
-• Stats: {model.stats.get('likes', 0)} likes, {model.stats.get('inferences', 0)} inferences
+                context += f"""MODEL INFO:
+Name: {model.name}
+ID: {model.id}
+Category: {model.category}
+Description: {model.description}
+Tags: {', '.join(model.tags)}
+Stats: {model.stats.get('likes', 0)} likes, {model.stats.get('inferences', 0)} inferences
 
 """
-            context += f"""USER QUESTION: {query}
-
-Please provide a helpful, specific answer about this model. If the user asks about technical details, explain them clearly. If they ask about use cases, provide practical examples."""
-
-            logger.info(f"📤 Sending to Gemini: {query[:50]}...")
+            context += f"USER QUESTION: {query}\n\nAnswer helpfully and specifically about this model."
             
             async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
+                resp = await client.post(
                     f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={gemini_key}",
                     headers={"Content-Type": "application/json"},
-                    json={
-                        "contents": [{"parts": [{"text": context}]}],
-                        "generationConfig": {
-                            "temperature": 0.7,
-                            "maxOutputTokens": 512
-                        }
-                    }
+                    json={"contents": [{"parts": [{"text": context}]}]}
                 )
-                
-                logger.info(f"📥 Gemini Status: {response.status_code}")
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    answer = data['candidates'][0]['content']['parts'][0]['text'].strip()
-                    logger.info(f"✅ Gemini Response: {answer[:100]}...")
-                    return answer
-                else:
-                    logger.error(f"❌ Gemini API Error: {response.status_code} - {response.text[:200]}")
-                    
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data['candidates'][0]['content']['parts'][0]['text'].strip()
+                logger.error(f"Gemini API error: {resp.status_code}")
         except Exception as e:
-            logger.error(f"❌ Gemini Exception: {type(e).__name__}: {e}")
+            logger.error(f"Gemini exception: {e}")
     
-    # Fallback на шаблонные ответы (если API не работает)
-    logger.info("⚠️ Using fallback template response")
-    return generate_template_response(query, model)
-
-def generate_template_response(query: str, model: Optional[ModelInfo]) -> str:
-    """Умные шаблонные ответы"""
-    q = query.lower()
-    
+    # Fallback
     if model:
-        if any(w in q for w in ["how", "work", "architecture", "technical", "algorithm"]):
-            return f"**{model.name}** uses advanced machine learning techniques optimized for {model.category} tasks.\n\n**Key Features:**\n• Trained on real blockchain and DeFi data\n• Optimized for ONNX runtime inference\n• Specialized tags: {', '.join(model.tags)}\n• Production-ready with high accuracy\n\n**Performance:**\n👍 {model.stats.get('likes', 0)} users liked this model\n🔄 {model.stats.get('inferences', 0)} total inferences executed"
-        
-        elif any(w in q for w in ["use", "deploy", "run", "install", "setup", "start"]):
-            return f"To deploy **{model.name}**:\n\n1. **Download** the model files from the repository\n2. **Install** ONNX runtime: `pip install onnxruntime`\n3. **Load** the model in your Python code\n4. **Prepare** input data in the expected format\n5. **Run** inference and get predictions\n6. **Integrate** into your application\n\nThe model is optimized for production use with low latency!"
-        
-        elif any(w in q for w in ["accuracy", "performance", "metric", "score", "precision", "recall"]):
-            return f"**{model.name}** Performance Metrics:\n\n• **User Rating:** {model.stats.get('likes', 0)} likes from the community\n• **Usage:** {model.stats.get('inferences', 0)} successful inferences\n• **Category:** {model.category}\n• **Format:** ONNX (optimized)\n• **Tags:** {', '.join(model.tags)}\n\nThis model is actively used in production environments with proven reliability."
-        
-        elif any(w in q for w in ["what", "describe", "about", "info", "information"]):
-            return f"**{model.name}**\n\n📋 **Description:** {model.description}\n\n🏷️ **Category:** {model.category}\n\n🔖 **Tags:** {', '.join(model.tags)}\n\n📊 **Community Stats:**\n• 👍 {model.stats.get('likes', 0)} likes\n• 🔄 {model.stats.get('inferences', 0)} inferences\n\nThis model is part of the OpenGradient decentralized AI ecosystem."
-        
-        else:
-            return f"**About {model.name}:**\n\n{model.description}\n\n**Category:** {model.category}\n**Tags:** {', '.join(model.tags)}\n**Stats:** {model.stats.get('likes', 0)} likes, {model.stats.get('inferences', 0)} inferences\n\nWhat specific aspect would you like to know more about?"
-    else:
-        return "👋 Welcome to OpenGradient Catalog!\n\nI can help you:\n• Understand model capabilities\n• Find the right model for your use case\n• Learn about deployment options\n• Compare different models\n\nSelect a model from the catalog to start chatting about it!"
+        return f"**{model.name}**\n\n📋 {model.description}\n🏷️ {model.category}\n🔖 {', '.join(model.tags)}\n📊 {model.stats.get('likes', 0)} likes, {model.stats.get('inferences', 0)} inferences\n\nAsk me anything specific!"
+    return "👋 Select a model to chat!"
 
 # === СОЗДАНИЕ МОДЕЛЕЙ ===
 
 async def process_model_creation(task_id: str, req: CreateModelRequest):
-    """Фоновая задача создания модели"""
     import asyncio
-    
     try:
-        logger.info(f" Starting task {task_id}")
-        
         model_tasks[task_id]["status"] = "processing"
         model_tasks[task_id]["progress"] = 25
         await asyncio.sleep(1)
@@ -170,29 +176,40 @@ async def process_model_creation(task_id: str, req: CreateModelRequest):
         model_tasks[task_id]["progress"] = 75
         await asyncio.sleep(1)
         
-        # Создаём новую модель
         model_id = f"og-{req.name.lower().replace(' ', '-')}"
         new_model = ModelInfo(
-            id=model_id,
-            name=req.name,
-            description=req.description,
-            category=req.category,
+            id=model_id, name=req.name, description=req.description, category=req.category,
             tags=["custom", "user-created", req.category.lower()],
             stats={"likes": 0, "inferences": 0},
             created_at=datetime.now().isoformat()
         )
         
-        # ✅ СОХРАНЯЕМ В ПАМЯТЬ
-        user_models.append(new_model)
-        logger.info(f"✅ Model saved to memory: {model_id} (total user models: {len(user_models)})")
+        # Сохраняем в БД
+        if DBModel and SessionLocal:
+            db = SessionLocal()
+            try:
+                db_model = DBModel(
+                    id=new_model.id, name=new_model.name, description=new_model.description,
+                    category=new_model.category, tags=json.dumps(new_model.tags),
+                    stats=json.dumps(new_model.stats), created_at=new_model.created_at, is_user_created=1
+                )
+                db.add(db_model)
+                db.commit()
+                logger.info(f"✅ Model SAVED to database: {model_id}")
+            finally:
+                db.close()
+        else:
+            user_models_memory.append(new_model)
+            logger.info(f"✅ Model saved to memory: {model_id}")
         
         model_tasks[task_id]["status"] = "completed"
         model_tasks[task_id]["progress"] = 100
         model_tasks[task_id]["result"] = {
             "model_id": model_id,
-            "message": "Model created and added to catalog",
+            "message": "Model created and saved permanently",
             "tx_hash": "0x" + os.urandom(32).hex() if req.wallet_key else None
         }
+        logger.info(f"✅ Task {task_id} completed")
         
     except Exception as e:
         model_tasks[task_id]["status"] = "failed"
@@ -212,22 +229,18 @@ async def health():
         "timestamp": datetime.now().isoformat(),
         "total_models": len(get_all_models()),
         "base_models": len(BASE_MODELS),
-        "user_models": len(user_models),
-        "gemini_key": "✓" if os.getenv("GEMINI_API_KEY") else "✗",
-        "openai_key": "✓" if os.getenv("OPENAI_API_KEY") else "✗"
+        "database": "✓" if DBModel else "✗",
+        "gemini_key": "✓" if os.getenv("GEMINI_API_KEY") else "✗"
     }
 
 @app.get("/api/models")
 async def list_models(category: Optional[str] = None, search: Optional[str] = None, limit: int = 50):
     models = get_all_models()
-    
     if category and category != 'all':
         models = [m for m in models if m.category.lower() == category.lower()]
-    
     if search:
         s = search.lower()
         models = [m for m in models if s in m.name.lower() or s in m.description.lower() or any(s in t for t in m.tags)]
-    
     return [m.model_dump() for m in models[:limit]]
 
 @app.get("/api/models/{model_id}")
@@ -253,50 +266,26 @@ async def get_stats():
         "total_likes": sum(m.stats.get('likes', 0) for m in models),
         "total_inferences": sum(m.stats.get('inferences', 0) for m in models),
         "categories": len(set(m.category for m in models)),
-        "user_created": len(user_models)
+        "user_created": len(models) - len(BASE_MODELS)
     }
 
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
-    logger.info(f"💬 Chat request: model_id={req.model_id}, query={req.query[:50]}...")
-    
     sid = req.session_id or f"s_{datetime.now().timestamp()}"
-    
-    # Ищем модель
-    model = None
-    if req.model_id:
-        model = next((m for m in get_all_models() if m.id == req.model_id), None)
-        logger.info(f"📦 Model found: {model.name if model else 'None'}")
-    
-    # Генерируем ответ
+    model = next((m for m in get_all_models() if m.id == req.model_id), None) if req.model_id else None
     reply = await generate_ai_response(req.query, model)
-    
-    # Сохраняем сессию
     if sid not in chat_sessions:
         chat_sessions[sid] = []
     chat_sessions[sid].append({"role": "user", "content": req.query})
     chat_sessions[sid].append({"role": "assistant", "content": reply})
-    
     return {"reply": reply, "session_id": sid}
-
-@app.get("/api/chat/{session_id}")
-async def get_chat(session_id: str):
-    return {"session_id": session_id, "messages": chat_sessions.get(session_id, [])}
 
 @app.post("/api/models/create")
 async def create_model(req: CreateModelRequest, bg: BackgroundTasks):
-    logger.info(f"🛠 Create model request: {req.name}")
-    
     tid = f"t_{datetime.now().timestamp()}"
-    model_tasks[tid] = {
-        "status": "queued",
-        "progress": 0,
-        "created": datetime.now().isoformat()
-    }
-    
+    model_tasks[tid] = {"status": "queued", "progress": 0, "created": datetime.now().isoformat()}
     bg.add_task(process_model_creation, tid, req)
-    
-    return {"task_id": tid, "status": "queued", "message": "Model creation started"}
+    return {"task_id": tid, "status": "queued", "message": "Started"}
 
 @app.get("/api/tasks/{task_id}")
 async def get_task(task_id: str):
@@ -305,15 +294,10 @@ async def get_task(task_id: str):
         raise HTTPException(404, "Task not found")
     return t
 
-@app.get("/api/user-models")
-async def get_user_models_endpoint():
-    """Получить только модели созданные пользователями"""
-    return [m.model_dump() for m in user_models]
-
 if __name__ == "__main__":
     import uvicorn
-    logger.info("🚀 Starting OpenGradient Catalog v2.3")
+    logger.info("🚀 OpenGradient Catalog v3.0")
     logger.info(f"📦 Base models: {len(BASE_MODELS)}")
-    logger.info(f"👤 User models: {len(user_models)}")
-    logger.info(f"🔑 Gemini API: {'✓' if os.getenv('GEMINI_API_KEY') else '✗'}")
+    logger.info(f"🗄️ Database: {'✓' if DBModel else '✗'}")
+    logger.info(f"🔑 Gemini: {'✓' if os.getenv('GEMINI_API_KEY') else '✗'}")
     uvicorn.run("main:app", host="0.0.0.0", port=8000)
