@@ -1,80 +1,365 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>🔷 OpenGradient Catalog</title>
   <style>
-    :root { --bg:#FF8C00; --card:#E67E00; --text:#fff; --border:2px solid #fff; --radius:4px; }
-    * { box-sizing:border-box; margin:0; padding:0; }
-    body { font-family:system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; padding:20px; }
-    .container { max-width:1200px; margin:0 auto; }
-    header { text-align:center; margin-bottom:30px; }
-    h1 { font-size:2rem; margin-bottom:10px; }
-    .filters { display:flex; gap:15px; margin-bottom:30px; flex-wrap:wrap; }
-    .filters input, .filters select { padding:12px; font-size:16px; border:var(--border); border-radius:var(--radius); background:#fff; color:var(--bg); min-width:200px; }
-    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:20px; }
-    .card { background:var(--card); border:var(--border); border-radius:var(--radius); padding:20px; }
-    .card-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; }
-    .card-title { font-size:1.1rem; flex:1; }
-    .badge { background:#fff; color:var(--bg); padding:4px 10px; border-radius:var(--radius); font-size:12px; font-weight:bold; }
-    .description { font-size:14px; opacity:0.9; margin:12px 0; line-height:1.4; }
-    .tags { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
-    .tag { background:rgba(0,0,0,0.2); padding:3px 8px; border-radius:var(--radius); font-size:12px; }
-    .stats { display:flex; gap:15px; font-size:13px; margin-bottom:15px; opacity:0.9; }
-    .buttons { display:flex; gap:10px; }
-    .btn { flex:1; text-align:center; padding:10px; border-radius:var(--radius); text-decoration:none; font-weight:bold; font-size:14px; cursor:pointer; border:none; }
-    .btn-primary { background:#fff; color:var(--bg); }
-    .btn-secondary { background:var(--bg); color:#fff; border:var(--border); }
-    .modal { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.8); z-index:100; align-items:center; justify-content:center; padding:20px; }
-    .modal.active { display:flex; }
-    .modal-content { background:var(--card); border:var(--border); border-radius:var(--radius); padding:20px; max-width:600px; width:100%; max-height:90vh; overflow-y:auto; }
-    .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; }
-    .modal-close { background:none; border:none; color:#fff; font-size:24px; cursor:pointer; }
-    .messages { margin-bottom:15px; max-height:400px; overflow-y:auto; }
-    .message { margin-bottom:10px; padding:10px 14px; border-radius:var(--radius); max-width:80%; }
-    .message.user { background:#fff; color:var(--bg); margin-left:auto; }
-    .message.bot { background:rgba(255,255,255,0.2); }
-    .input-area { display:flex; gap:10px; }
-    .input-area input { flex:1; padding:12px; border:var(--border); border-radius:var(--radius); background:#fff; color:var(--bg); }
-    .input-area button { padding:12px 20px; background:#fff; color:var(--bg); border:none; border-radius:var(--radius); cursor:pointer; font-weight:bold; }
-    .form-group { margin-bottom:15px; }
-    .form-group label { display:block; margin-bottom:5px; font-size:14px; }
-    .form-group input, .form-group textarea, .form-group select { width:100%; padding:10px; border:var(--border); border-radius:var(--radius); background:#fff; color:var(--bg); font-size:14px; }
-    .form-group textarea { resize:vertical; min-height:80px; }
-    .loading, .empty { text-align:center; font-size:18px; grid-column:1/-1; opacity:0.8; }
+    :root {
+      --bg: #FF8C00;
+      --card-bg: #FFFFFF;
+      --card-border: #FF8C00;
+      --text: #333333;
+      --text-light: #666666;
+      --accent: #FF8C00;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    
+    /* Header */
+    header { text-align: center; margin-bottom: 40px; }
+    h1 {
+      font-size: 2.5rem;
+      color: #FFFFFF;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+    .subtitle { color: rgba(255,255,255,0.9); font-size: 1.1rem; }
+    
+    /* Filters */
+    .filters {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 40px;
+      flex-wrap: wrap;
+    }
+    .filters input, .filters select {
+      padding: 14px 18px;
+      font-size: 15px;
+      border: 2px solid #FFFFFF;
+      border-radius: var(--radius);
+      background: #FFFFFF;
+      color: var(--text);
+      min-width: 200px;
+      font-weight: 500;
+    }
+    .filters input::placeholder { color: #999; }
+    
+    /* Grid */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 24px;
+    }
+    
+    /* Card */
+    .card {
+      background: var(--card-bg);
+      border: 2px solid #FFFFFF;
+      border-radius: var(--radius);
+      padding: 24px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+    .card-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--text);
+      flex: 1;
+    }
+    .badge {
+      background: var(--accent);
+      color: #FFFFFF;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .description {
+      font-size: 14px;
+      color: var(--text-light);
+      margin: 12px 0;
+      line-height: 1.5;
+    }
+    .tags {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin: 16px 0;
+    }
+    .tag {
+      background: #F5F5F5;
+      color: var(--text-light);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .stats {
+      display: flex;
+      gap: 20px;
+      font-size: 13px;
+      color: var(--text-light);
+      margin: 16px 0;
+    }
+    .stats span { display: flex; align-items: center; gap: 4px; }
+    
+    /* Buttons */
+    .buttons { display: flex; gap: 10px; margin-top: 16px; }
+    .btn {
+      flex: 1;
+      text-align: center;
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      border: 2px solid var(--accent);
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #FFFFFF;
+    }
+    .btn-primary:hover {
+      background: #E67E00;
+      border-color: #E67E00;
+    }
+    .btn-secondary {
+      background: #FFFFFF;
+      color: var(--accent);
+    }
+    .btn-secondary:hover {
+      background: #FFF5E6;
+    }
+    
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal.active { display: flex; }
+    .modal-content {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      padding: 32px;
+      max-width: 600px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      border: 2px solid var(--accent);
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid #F5F5F5;
+    }
+    .modal-header h3 {
+      font-size: 1.3rem;
+      color: var(--text);
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--text-light);
+      font-size: 28px;
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+    }
+    .modal-close:hover { color: var(--accent); }
+    
+    /* Chat */
+    .model-info {
+      background: #FFF5E6;
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      font-size: 13px;
+      border-left: 3px solid var(--accent);
+    }
+    .messages {
+      margin-bottom: 20px;
+      max-height: 400px;
+      overflow-y: auto;
+      padding: 16px 0;
+    }
+    .message {
+      margin-bottom: 12px;
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      max-width: 85%;
+      line-height: 1.4;
+    }
+    .message.user {
+      background: var(--accent);
+      color: #FFFFFF;
+      margin-left: auto;
+    }
+    .message.bot {
+      background: #F5F5F5;
+      color: var(--text);
+    }
+    .input-area {
+      display: flex;
+      gap: 10px;
+    }
+    .input-area input {
+      flex: 1;
+      padding: 14px 18px;
+      border: 2px solid #E0E0E0;
+      border-radius: var(--radius);
+      background: #FFFFFF;
+      color: var(--text);
+      font-size: 15px;
+    }
+    .input-area input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .input-area button {
+      padding: 14px 24px;
+      background: var(--accent);
+      color: #FFFFFF;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 15px;
+      transition: background 0.2s;
+    }
+    .input-area button:hover { background: #E67E00; }
+    
+    /* Form */
+    .form-group { margin-bottom: 20px; }
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #E0E0E0;
+      border-radius: var(--radius);
+      background: #FFFFFF;
+      color: var(--text);
+      font-size: 15px;
+      font-family: inherit;
+    }
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .form-group textarea { resize: vertical; min-height: 100px; }
+    
+    /* Progress */
+    .progress {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding: 16px;
+      background: #FFF5E6;
+      border-radius: var(--radius);
+      border: 2px solid var(--accent);
+    }
+    .step { color: var(--text-light); font-weight: 500; }
+    .step.active { color: var(--accent); font-weight: 700; }
+    .arrow { color: var(--text-light); }
+    
+    /* Status */
+    .loading, .empty {
+      text-align: center;
+      font-size: 18px;
+      grid-column: 1 / -1;
+      color: rgba(255,255,255,0.9);
+      padding: 40px;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+      h1 { font-size: 1.8rem; }
+      .filters { flex-direction: column; }
+      .filters input, .filters select { width: 100%; }
+      .grid { grid-template-columns: 1fr; }
+      .modal-content { padding: 24px; }
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
       <h1>🔷 OpenGradient Catalog</h1>
-      <p>Каталог AI-моделей с чат-ассистентом</p>
+      <p class="subtitle">AI Model Catalog with Chat Assistant</p>
     </header>
+
     <div class="filters">
-      <input type="text" id="search" placeholder="🔍 Поиск...">
+      <input type="text" id="search" placeholder="🔍 Search models...">
       <select id="category">
-        <option value="all">Все категории</option>
+        <option value="all">All Categories</option>
         <option value="defi">DeFi</option>
-        <option value="language">Language</option>
-        <option value="risk">Risk</option>
+        <option value="language">Language Models</option>
+        <option value="risk">Risk Models</option>
         <option value="multimodal">Multimodal</option>
+        <option value="protocol">Protocol Optimization</option>
       </select>
     </div>
-    <div class="grid" id="grid"><p class="loading">⏳ Загрузка...</p></div>
+
+    <div class="grid" id="grid">
+      <p class="loading">⏳ Loading models...</p>
+    </div>
   </div>
 
   <!-- Chat Modal -->
   <div class="modal" id="chatModal">
     <div class="modal-content">
       <div class="modal-header">
-        <h3 id="chatTitle">💬 Чат</h3>
+        <h3 id="chatTitle">💬 Chat</h3>
         <button class="modal-close" onclick="closeModal()">&times;</button>
       </div>
-      <div id="chatInfo" style="margin-bottom:10px;font-size:13px;opacity:0.9;"></div>
+      <div class="model-info" id="chatInfo"></div>
       <div class="messages" id="chatMsgs"></div>
       <div class="input-area">
-        <input type="text" id="chatInput" placeholder="Вопрос..." onkeypress="if(event.key==='Enter')sendChat()">
+        <input type="text" id="chatInput" placeholder="Type your question..." onkeypress="if(event.key==='Enter')sendChat()">
         <button onclick="sendChat()">➤</button>
       </div>
     </div>
@@ -84,17 +369,58 @@
   <div class="modal" id="createModal">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>🛠 Создание</h3>
+        <h3>🛠 Create Model</h3>
         <button class="modal-close" onclick="closeCreate()">&times;</button>
       </div>
+      
+      <div class="progress">
+        <span class="step active">1. Select</span>
+        <span class="arrow">→</span>
+        <span class="step">2. Configure</span>
+        <span class="arrow">→</span>
+        <span class="step">3. Deploy</span>
+      </div>
+
       <form id="createForm" onsubmit="doCreate(event)">
-        <div class="form-group"><label>Название *</label><input type="text" id="cName" required></div>
-        <div class="form-group"><label>Описание *</label><textarea id="cDesc" required></textarea></div>
-        <div class="form-group"><label>Категория</label><select id="cCat"><option>DeFi</option><option>Language</option><option>Risk</option><option>Multimodal</option></select></div>
-        <div class="form-group"><label>Базовая модель</label><input type="text" id="cBase"></div>
-        <button type="submit" class="btn btn-primary" style="width:100%">→ Создать</button>
+        <div class="form-group">
+          <label>Model Name *</label>
+          <input type="text" id="cName" required placeholder="og-my-model-v1">
+        </div>
+        <div class="form-group">
+          <label>Description *</label>
+          <textarea id="cDesc" required placeholder="Describe your model..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select id="cCat">
+            <option>DeFi</option>
+            <option>Language</option>
+            <option>Risk</option>
+            <option>Multimodal</option>
+            <option>Protocol</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Base Model</label>
+          <input type="text" id="cBase" placeholder="og-llama3-fintune-v2">
+        </div>
+        <div class="form-group">
+          <label>Configuration Options</label>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+            <label style="font-weight:400;display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" style="width:auto;"> Enable real-time inference
+            </label>
+            <label style="font-weight:400;display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" style="width:auto;"> Add webhook callback
+            </label>
+            <label style="font-weight:400;display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" style="width:auto;"> Export to ONNX
+            </label>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:10px;">→ Next Step</button>
       </form>
-      <div id="cStatus" style="margin-top:15px;font-size:14px;"></div>
+      <div id="cStatus" style="margin-top:20px;font-size:14px;padding:16px;background:#FFF5E6;border-radius:8px;display:none;"></div>
     </div>
   </div>
 
@@ -111,16 +437,25 @@
         const r = await fetch(`${API}/api/models?${p}`), m = await r.json();
         document.getElementById('grid').innerHTML = m.length ? m.map(x=>`
           <div class="card">
-            <div class="card-header"><h3 class="card-title">${x.name}</h3><span class="badge">${x.category}</span></div>
+            <div class="card-header">
+              <h3 class="card-title">${x.name}</h3>
+              <span class="badge">${x.category}</span>
+            </div>
             <p class="description">${x.description}</p>
             <div class="tags">${x.tags.slice(0,3).map(t=>`<span class="tag">#${t}</span>`).join('')}</div>
-            <div class="stats"><span>⭐ ${x.stats.likes}</span><span>🔄 ${x.stats.inferences}</span></div>
-            <div class="buttons">
-              <button class="btn btn-primary" onclick="openChat('${x.id}')">💬 Спросить</button>
-              <button class="btn btn-secondary" onclick="openCreate('${x.id}')">🛠 Создать</button>
+            <div class="stats">
+              <span>⭐ ${x.stats.likes}</span>
+              <span>🔄 ${x.stats.inferences}</span>
             </div>
-          </div>`).join('') : '<p class="empty">Не найдено</p>';
-      } catch(e) { document.getElementById('grid').innerHTML = '<p class="empty">❌ Ошибка</p>'; console.error(e); }
+            <div class="buttons">
+              <button class="btn btn-primary" onclick="openChat('${x.id}')">💬 Ask about model</button>
+              <button class="btn btn-secondary" onclick="openCreate('${x.id}')">🛠 Create similar</button>
+            </div>
+          </div>`).join('') : '<p class="empty">No models found</p>';
+      } catch(e) {
+        document.getElementById('grid').innerHTML = '<p class="empty">❌ Error loading models</p>';
+        console.error(e);
+      }
     }
 
     function openChat(id) {
@@ -128,55 +463,91 @@
       document.getElementById('chatMsgs').innerHTML = '';
       document.getElementById('chatInput').value = '';
       fetch(`${API}/api/models/${id}`).then(r=>r.json()).then(m=>{
-        document.getElementById('chatTitle').textContent = `💬 ${m.name}`;
-        document.getElementById('chatInfo').innerHTML = `<b>Категория:</b> ${m.category}<br><b>Теги:</b> ${m.tags.join(', ')}`;
+        document.getElementById('chatTitle').textContent = `💬 Chat: ${m.id}`;
+        document.getElementById('chatInfo').innerHTML = `
+          <strong>Name:</strong> ${m.name}<br>
+          <strong>Category:</strong> ${m.category}<br>
+          <strong>Description:</strong> ${m.description}
+        `;
       });
       document.getElementById('chatModal').classList.add('active');
     }
     function closeModal() { document.getElementById('chatModal').classList.remove('active'); curModel = null; }
+    
     async function sendChat() {
       const inp = document.getElementById('chatInput'), q = inp.value.trim();
       if(!q) return;
       const msgs = document.getElementById('chatMsgs');
       msgs.innerHTML += `<div class="message user">${q}</div>`;
       inp.value = '';
+      msgs.scrollTop = msgs.scrollHeight;
+      
       try {
-        const r = await fetch(`${API}/api/chat`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query:q, model_id:curModel, session_id:sessId})}),
-              d = await r.json();
+        const r = await fetch(`${API}/api/chat`, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({query:q, model_id:curModel, session_id:sessId})
+        });
+        const d = await r.json();
         sessId = d.session_id;
         msgs.innerHTML += `<div class="message bot">${d.reply.replace(/\n/g,'<br>')}</div>`;
         msgs.scrollTop = msgs.scrollHeight;
-      } catch(e) { msgs.innerHTML += `<div class="message bot">❌ Ошибка</div>`; }
+      } catch(e) {
+        msgs.innerHTML += `<div class="message bot">❌ Connection error</div>`;
+      }
     }
 
     function openCreate(base) {
       document.getElementById('createForm').reset();
       document.getElementById('cBase').value = base || '';
+      document.getElementById('cStatus').style.display = 'none';
       document.getElementById('cStatus').innerHTML = '';
       document.getElementById('createModal').classList.add('active');
     }
     function closeCreate() { document.getElementById('createModal').classList.remove('active'); }
+    
     async function doCreate(e) {
       e.preventDefault();
-      const btn = e.target.querySelector('button'), st = document.getElementById('cStatus');
-      btn.disabled = true; btn.textContent = '⏳...';
+      const btn = e.target.querySelector('button[type="submit"]'), st = document.getElementById('cStatus');
+      btn.disabled = true; btn.textContent = '⏳ Creating...';
+      st.style.display = 'block';
+      
       try {
-        const r = await fetch(`${API}/api/models/create`, {method:'POST', headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({name:document.getElementById('cName').value, description:document.getElementById('cDesc').value, category:document.getElementById('cCat').value, base_model:document.getElementById('cBase').value})}),
-          d = await r.json();
-        st.innerHTML = `📋 ${d.task_id}<br>Статус: ${d.status}`;
+        const r = await fetch(`${API}/api/models/create`, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            name:document.getElementById('cName').value,
+            description:document.getElementById('cDesc').value,
+            category:document.getElementById('cCat').value,
+            base_model:document.getElementById('cBase').value
+          })
+        });
+        const d = await r.json();
+        st.innerHTML = `📋 Task: ${d.task_id}<br>Status: ${d.status}`;
+        
         const poll = setInterval(async ()=>{
           const x = await fetch(`${API}/api/tasks/${d.task_id}`).then(r=>r.json());
-          st.innerHTML = `📋 ${d.task_id}<br>Статус: <b>${x.status}</b>`;
-          if(x.status==='completed') { clearInterval(poll); st.innerHTML+=`<br>✅ ${x.result?.model_id}`; setTimeout(()=>{closeCreate();load();},2000); }
+          st.innerHTML = `📋 Task: ${d.task_id}<br>Status: <strong>${x.status}</strong>`;
+          if(x.status==='completed') {
+            clearInterval(poll);
+            st.innerHTML += `<br><br>✅ Model created: <strong>${x.result?.model_id}</strong>`;
+            setTimeout(()=>{closeCreate();load();},2500);
+          }
         }, 2000);
-      } catch(err) { st.innerHTML = `❌ ${err.message}`; }
-      finally { btn.disabled = false; btn.textContent = '→ Создать'; }
+      } catch(err) {
+        st.innerHTML = `❌ Error: ${err.message}`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '→ Next Step';
+      }
     }
 
     document.getElementById('search').addEventListener('input', load);
     document.getElementById('category').addEventListener('change', load);
-    window.onclick = e => { if(e.target.classList.contains('modal')) { closeModal(); closeCreate(); } };
+    window.onclick = e => {
+      if(e.target.classList.contains('modal')) { closeModal(); closeCreate(); }
+    };
     load();
   </script>
 </body>
