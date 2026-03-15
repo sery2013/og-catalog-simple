@@ -8,65 +8,74 @@
     :root {
       --bg: #FF8C00;
       --card-bg: #FFFFFF;
-      --card-border: #FF8C00;
       --text: #333333;
       --text-light: #666666;
       --accent: #FF8C00;
       --radius: 8px;
+      --shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
       padding: 40px 20px;
     }
-    .container { max-width: 1200px; margin: 0 auto; }
+    .container { max-width: 1400px; margin: 0 auto; }
     
-    /* Header */
-    header { text-align: center; margin-bottom: 40px; }
-    h1 {
-      font-size: 2.5rem;
-      color: #FFFFFF;
-      margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-    }
+    /* Header & Stats */
+    header { text-align: center; margin-bottom: 30px; }
+    h1 { font-size: 2.5rem; color: #fff; margin-bottom: 8px; }
     .subtitle { color: rgba(255,255,255,0.9); font-size: 1.1rem; }
+    
+    .stats-bar {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 30px;
+      padding: 16px 24px;
+      background: rgba(255,255,255,0.15);
+      border-radius: var(--radius);
+      backdrop-filter: blur(10px);
+    }
+    .stat-item {
+      text-align: center;
+      color: #fff;
+      padding: 8px 16px;
+    }
+    .stat-value { font-size: 1.8rem; font-weight: 700; display: block; }
+    .stat-label { font-size: 0.85rem; opacity: 0.9; }
     
     /* Filters */
     .filters {
       display: flex;
       gap: 15px;
-      margin-bottom: 40px;
+      margin-bottom: 30px;
       flex-wrap: wrap;
     }
     .filters input, .filters select {
       padding: 14px 18px;
       font-size: 15px;
-      border: 2px solid #FFFFFF;
+      border: 2px solid #fff;
       border-radius: var(--radius);
-      background: #FFFFFF;
+      background: #fff;
       color: var(--text);
       min-width: 200px;
-      font-weight: 500;
     }
-    .filters input::placeholder { color: #999; }
     
     /* Grid */
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
       gap: 24px;
     }
     
     /* Card */
     .card {
       background: var(--card-bg);
-      border: 2px solid #FFFFFF;
+      border: 2px solid #fff;
       border-radius: var(--radius);
       padding: 24px;
       transition: transform 0.2s, box-shadow 0.2s;
@@ -81,85 +90,49 @@
       align-items: flex-start;
       margin-bottom: 12px;
     }
-    .card-title {
-      font-size: 1.2rem;
-      font-weight: 700;
-      color: var(--text);
-      flex: 1;
-    }
+    .card-title { font-size: 1.2rem; font-weight: 700; flex: 1; }
     .badge {
       background: var(--accent);
-      color: #FFFFFF;
+      color: #fff;
       padding: 4px 12px;
       border-radius: 20px;
       font-size: 12px;
       font-weight: 600;
-      text-transform: uppercase;
     }
-    .description {
-      font-size: 14px;
-      color: var(--text-light);
-      margin: 12px 0;
-      line-height: 1.5;
-    }
-    .tags {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-      margin: 16px 0;
-    }
+    .description { font-size: 14px; color: var(--text-light); margin: 12px 0; line-height: 1.5; }
+    .tags { display: flex; gap: 6px; flex-wrap: wrap; margin: 16px 0; }
     .tag {
       background: #F5F5F5;
       color: var(--text-light);
       padding: 4px 10px;
       border-radius: 4px;
       font-size: 12px;
-      font-weight: 500;
     }
-    .stats {
-      display: flex;
-      gap: 20px;
-      font-size: 13px;
-      color: var(--text-light);
-      margin: 16px 0;
-    }
+    .stats { display: flex; gap: 20px; font-size: 13px; color: var(--text-light); margin: 16px 0; }
     .stats span { display: flex; align-items: center; gap: 4px; }
     
-    /* Buttons */
     .buttons { display: flex; gap: 10px; margin-top: 16px; }
     .btn {
       flex: 1;
       text-align: center;
       padding: 12px 16px;
       border-radius: var(--radius);
-      text-decoration: none;
       font-weight: 600;
       font-size: 14px;
       cursor: pointer;
       border: 2px solid var(--accent);
       transition: all 0.2s;
     }
-    .btn-primary {
-      background: var(--accent);
-      color: #FFFFFF;
-    }
-    .btn-primary:hover {
-      background: #E67E00;
-      border-color: #E67E00;
-    }
-    .btn-secondary {
-      background: #FFFFFF;
-      color: var(--accent);
-    }
-    .btn-secondary:hover {
-      background: #FFF5E6;
-    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #E67E00; border-color: #E67E00; }
+    .btn-secondary { background: #fff; color: var(--accent); }
+    .btn-secondary:hover { background: #FFF5E6; }
     
     /* Modal */
     .modal {
       display: none;
       position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
+      inset: 0;
       background: rgba(0,0,0,0.7);
       z-index: 100;
       align-items: center;
@@ -171,7 +144,7 @@
       background: var(--card-bg);
       border-radius: var(--radius);
       padding: 32px;
-      max-width: 600px;
+      max-width: 700px;
       width: 100%;
       max-height: 90vh;
       overflow-y: auto;
@@ -185,36 +158,36 @@
       padding-bottom: 16px;
       border-bottom: 2px solid #F5F5F5;
     }
-    .modal-header h3 {
-      font-size: 1.3rem;
-      color: var(--text);
-    }
+    .modal-header h3 { font-size: 1.3rem; }
     .modal-close {
       background: none;
       border: none;
       color: var(--text-light);
       font-size: 28px;
       cursor: pointer;
-      padding: 0;
-      line-height: 1;
     }
     .modal-close:hover { color: var(--accent); }
     
-    /* Chat */
-    .model-info {
+    /* Chat Layout */
+    .chat-layout {
+      display: grid;
+      grid-template-columns: 1fr 300px;
+      gap: 20px;
+    }
+    @media (max-width: 768px) {
+      .chat-layout { grid-template-columns: 1fr; }
+    }
+    
+    .model-sidebar {
       background: #FFF5E6;
-      padding: 12px 16px;
+      padding: 16px;
       border-radius: var(--radius);
-      margin-bottom: 16px;
-      font-size: 13px;
       border-left: 3px solid var(--accent);
+      font-size: 13px;
     }
-    .messages {
-      margin-bottom: 20px;
-      max-height: 400px;
-      overflow-y: auto;
-      padding: 16px 0;
-    }
+    .model-sidebar strong { display: block; margin-bottom: 4px; color: var(--text); }
+    
+    .messages { max-height: 400px; overflow-y: auto; padding: 16px 0; }
     .message {
       margin-bottom: 12px;
       padding: 12px 16px;
@@ -222,75 +195,29 @@
       max-width: 85%;
       line-height: 1.4;
     }
-    .message.user {
-      background: var(--accent);
-      color: #FFFFFF;
-      margin-left: auto;
-    }
-    .message.bot {
-      background: #F5F5F5;
-      color: var(--text);
-    }
-    .input-area {
-      display: flex;
-      gap: 10px;
-    }
+    .message.user { background: var(--accent); color: #fff; margin-left: auto; }
+    .message.bot { background: #F5F5F5; color: var(--text); }
+    
+    .input-area { display: flex; gap: 10px; }
     .input-area input {
       flex: 1;
       padding: 14px 18px;
       border: 2px solid #E0E0E0;
       border-radius: var(--radius);
-      background: #FFFFFF;
-      color: var(--text);
       font-size: 15px;
     }
-    .input-area input:focus {
-      outline: none;
-      border-color: var(--accent);
-    }
+    .input-area input:focus { outline: none; border-color: var(--accent); }
     .input-area button {
       padding: 14px 24px;
       background: var(--accent);
-      color: #FFFFFF;
+      color: #fff;
       border: none;
       border-radius: var(--radius);
       cursor: pointer;
       font-weight: 600;
-      font-size: 15px;
-      transition: background 0.2s;
     }
-    .input-area button:hover { background: #E67E00; }
     
     /* Form */
-    .form-group { margin-bottom: 20px; }
-    .form-group label {
-      display: block;
-      margin-bottom: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text);
-    }
-    .form-group input,
-    .form-group textarea,
-    .form-group select {
-      width: 100%;
-      padding: 12px 16px;
-      border: 2px solid #E0E0E0;
-      border-radius: var(--radius);
-      background: #FFFFFF;
-      color: var(--text);
-      font-size: 15px;
-      font-family: inherit;
-    }
-    .form-group input:focus,
-    .form-group textarea:focus,
-    .form-group select:focus {
-      outline: none;
-      border-color: var(--accent);
-    }
-    .form-group textarea { resize: vertical; min-height: 100px; }
-    
-    /* Progress */
     .progress {
       display: flex;
       align-items: center;
@@ -306,7 +233,53 @@
     .step.active { color: var(--accent); font-weight: 700; }
     .arrow { color: var(--text-light); }
     
-    /* Status */
+    .form-group { margin-bottom: 20px; }
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .form-group input, .form-group textarea, .form-group select {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #E0E0E0;
+      border-radius: var(--radius);
+      font-size: 15px;
+    }
+    .form-group input:focus, .form-group textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .form-group textarea { resize: vertical; min-height: 100px; }
+    
+    .wallet-section {
+      background: #FFF5E6;
+      padding: 16px;
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      border: 2px solid var(--accent);
+    }
+    .wallet-section label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+    .wallet-section input {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid var(--accent);
+      border-radius: var(--radius);
+      font-family: monospace;
+      font-size: 13px;
+    }
+    .wallet-warning {
+      font-size: 12px;
+      color: var(--text-light);
+      margin-top: 6px;
+    }
+    
     .loading, .empty {
       text-align: center;
       font-size: 18px;
@@ -315,13 +288,10 @@
       padding: 40px;
     }
     
-    /* Responsive */
     @media (max-width: 768px) {
       h1 { font-size: 1.8rem; }
       .filters { flex-direction: column; }
-      .filters input, .filters select { width: 100%; }
       .grid { grid-template-columns: 1fr; }
-      .modal-content { padding: 24px; }
     }
   </style>
 </head>
@@ -329,8 +299,27 @@
   <div class="container">
     <header>
       <h1>🔷 OpenGradient Catalog</h1>
-      <p class="subtitle">AI Model Catalog with Chat Assistant</p>
+      <p class="subtitle">Decentralized AI Model Hub</p>
     </header>
+
+    <div class="stats-bar" id="statsBar">
+      <div class="stat-item">
+        <span class="stat-value" id="statModels">-</span>
+        <span class="stat-label">Total Models</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value" id="statLikes">-</span>
+        <span class="stat-label">Total Likes</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value" id="statInferences">-</span>
+        <span class="stat-label">Inferences</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value" id="statCategories">-</span>
+        <span class="stat-label">Categories</span>
+      </div>
+    </div>
 
     <div class="filters">
       <input type="text" id="search" placeholder="🔍 Search models...">
@@ -344,23 +333,25 @@
       </select>
     </div>
 
-    <div class="grid" id="grid">
-      <p class="loading">⏳ Loading models...</p>
-    </div>
+    <div class="grid" id="grid"><p class="loading">⏳ Loading models from OpenGradient...</p></div>
   </div>
 
   <!-- Chat Modal -->
   <div class="modal" id="chatModal">
-    <div class="modal-content">
+    <div class="modal-content" style="max-width:900px;">
       <div class="modal-header">
         <h3 id="chatTitle">💬 Chat</h3>
         <button class="modal-close" onclick="closeModal()">&times;</button>
       </div>
-      <div class="model-info" id="chatInfo"></div>
-      <div class="messages" id="chatMsgs"></div>
-      <div class="input-area">
-        <input type="text" id="chatInput" placeholder="Type your question..." onkeypress="if(event.key==='Enter')sendChat()">
-        <button onclick="sendChat()">➤</button>
+      <div class="chat-layout">
+        <div>
+          <div class="messages" id="chatMsgs"></div>
+          <div class="input-area">
+            <input type="text" id="chatInput" placeholder="Type your question..." onkeypress="if(event.key==='Enter')sendChat()">
+            <button onclick="sendChat()">➤ Send</button>
+          </div>
+        </div>
+        <div class="model-sidebar" id="chatSidebar"></div>
       </div>
     </div>
   </div>
@@ -381,6 +372,12 @@
         <span class="step">3. Deploy</span>
       </div>
 
+      <div class="wallet-section">
+        <label>🔑 Wallet Private Key (for deployment)</label>
+        <input type="password" id="walletKey" placeholder="0x...">
+        <div class="wallet-warning">⚠️ Your key is encrypted and never stored. Required for on-chain deployment.</div>
+      </div>
+
       <form id="createForm" onsubmit="doCreate(event)">
         <div class="form-group">
           <label>Model Name *</label>
@@ -388,7 +385,7 @@
         </div>
         <div class="form-group">
           <label>Description *</label>
-          <textarea id="cDesc" required placeholder="Describe your model..."></textarea>
+          <textarea id="cDesc" required placeholder="Describe your model's capabilities..."></textarea>
         </div>
         <div class="form-group">
           <label>Category</label>
@@ -405,7 +402,7 @@
           <input type="text" id="cBase" placeholder="og-llama3-fintune-v2">
         </div>
         <div class="form-group">
-          <label>Configuration Options</label>
+          <label>Configuration</label>
           <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
             <label style="font-weight:400;display:flex;align-items:center;gap:8px;">
               <input type="checkbox" style="width:auto;"> Enable real-time inference
@@ -418,9 +415,9 @@
             </label>
           </div>
         </div>
-        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:10px;">→ Next Step</button>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:10px;">→ Deploy Model</button>
       </form>
-      <div id="cStatus" style="margin-top:20px;font-size:14px;padding:16px;background:#FFF5E6;border-radius:8px;display:none;"></div>
+      <div id="cStatus" style="margin-top:20px;padding:16px;background:#FFF5E6;border-radius:8px;display:none;"></div>
     </div>
   </div>
 
@@ -428,11 +425,26 @@
     const API = '';
     let curModel = null, sessId = null;
 
+    // Load stats
+    async function loadStats() {
+      try {
+        const r = await fetch(`${API}/api/stats`);
+        const s = await r.json();
+        document.getElementById('statModels').textContent = s.total_models || '-';
+        document.getElementById('statLikes').textContent = (s.total_likes || 0).toLocaleString();
+        document.getElementById('statInferences').textContent = (s.total_inferences || 0).toLocaleString();
+        document.getElementById('statCategories').textContent = s.categories || '-';
+      } catch(e) { console.error('Stats error:', e); }
+    }
+
+    // Load models
     async function load() {
       const s = document.getElementById('search').value, c = document.getElementById('category').value;
       const p = new URLSearchParams();
       if(c!=='all') p.append('category', c);
       if(s) p.append('search', s);
+      p.append('limit', '50');
+      
       try {
         const r = await fetch(`${API}/api/models?${p}`), m = await r.json();
         document.getElementById('grid').innerHTML = m.length ? m.map(x=>`
@@ -442,7 +454,7 @@
               <span class="badge">${x.category}</span>
             </div>
             <p class="description">${x.description}</p>
-            <div class="tags">${x.tags.slice(0,3).map(t=>`<span class="tag">#${t}</span>`).join('')}</div>
+            <div class="tags">${x.tags.slice(0,4).map(t=>`<span class="tag">#${t}</span>`).join('')}</div>
             <div class="stats">
               <span>⭐ ${x.stats.likes}</span>
               <span>🔄 ${x.stats.inferences}</span>
@@ -452,6 +464,7 @@
               <button class="btn btn-secondary" onclick="openCreate('${x.id}')">🛠 Create similar</button>
             </div>
           </div>`).join('') : '<p class="empty">No models found</p>';
+        loadStats();
       } catch(e) {
         document.getElementById('grid').innerHTML = '<p class="empty">❌ Error loading models</p>';
         console.error(e);
@@ -462,12 +475,15 @@
       curModel = id; sessId = null;
       document.getElementById('chatMsgs').innerHTML = '';
       document.getElementById('chatInput').value = '';
+      
       fetch(`${API}/api/models/${id}`).then(r=>r.json()).then(m=>{
         document.getElementById('chatTitle').textContent = `💬 Chat: ${m.id}`;
-        document.getElementById('chatInfo').innerHTML = `
-          <strong>Name:</strong> ${m.name}<br>
-          <strong>Category:</strong> ${m.category}<br>
-          <strong>Description:</strong> ${m.description}
+        document.getElementById('chatSidebar').innerHTML = `
+          <strong>${m.name}</strong>
+          <div style="margin:8px 0;"><strong>Category:</strong> ${m.category}</div>
+          <div style="margin:8px 0;"><strong>Description:</strong> ${m.description}</div>
+          <div style="margin:8px 0;"><strong>Tags:</strong> ${m.tags.join(', ')}</div>
+          <div style="margin:8px 0;"><strong>Stats:</strong> ⭐ ${m.stats.likes} | 🔄 ${m.stats.inferences}</div>
         `;
       });
       document.getElementById('chatModal').classList.add('active');
@@ -492,16 +508,13 @@
         sessId = d.session_id;
         msgs.innerHTML += `<div class="message bot">${d.reply.replace(/\n/g,'<br>')}</div>`;
         msgs.scrollTop = msgs.scrollHeight;
-      } catch(e) {
-        msgs.innerHTML += `<div class="message bot">❌ Connection error</div>`;
-      }
+      } catch(e) { msgs.innerHTML += `<div class="message bot">❌ Connection error</div>`; }
     }
 
     function openCreate(base) {
       document.getElementById('createForm').reset();
       document.getElementById('cBase').value = base || '';
       document.getElementById('cStatus').style.display = 'none';
-      document.getElementById('cStatus').innerHTML = '';
       document.getElementById('createModal').classList.add('active');
     }
     function closeCreate() { document.getElementById('createModal').classList.remove('active'); }
@@ -509,7 +522,7 @@
     async function doCreate(e) {
       e.preventDefault();
       const btn = e.target.querySelector('button[type="submit"]'), st = document.getElementById('cStatus');
-      btn.disabled = true; btn.textContent = '⏳ Creating...';
+      btn.disabled = true; btn.textContent = '⏳ Deploying...';
       st.style.display = 'block';
       
       try {
@@ -520,7 +533,8 @@
             name:document.getElementById('cName').value,
             description:document.getElementById('cDesc').value,
             category:document.getElementById('cCat').value,
-            base_model:document.getElementById('cBase').value
+            base_model:document.getElementById('cBase').value,
+            wallet_key: document.getElementById('walletKey').value || null
           })
         });
         const d = await r.json();
@@ -528,27 +542,29 @@
         
         const poll = setInterval(async ()=>{
           const x = await fetch(`${API}/api/tasks/${d.task_id}`).then(r=>r.json());
-          st.innerHTML = `📋 Task: ${d.task_id}<br>Status: <strong>${x.status}</strong>`;
+          let html = `📋 Task: ${d.task_id}<br>`;
+          html += `Status: <strong>${x.status}</strong><br>`;
+          if(x.progress) html += `Progress: ${x.progress}%<br>`;
+          st.innerHTML = html;
+          
           if(x.status==='completed') {
             clearInterval(poll);
-            st.innerHTML += `<br><br>✅ Model created: <strong>${x.result?.model_id}</strong>`;
-            setTimeout(()=>{closeCreate();load();},2500);
+            st.innerHTML += `<br>✅ Model created: <strong>${x.result?.model_id}</strong>`;
+            if(x.result?.tx_hash) st.innerHTML += `<br>🔗 TX: ${x.result.tx_hash.slice(0,20)}...`;
+            setTimeout(()=>{closeCreate();load();},3000);
           }
         }, 2000);
-      } catch(err) {
-        st.innerHTML = `❌ Error: ${err.message}`;
-      } finally {
-        btn.disabled = false;
-        btn.textContent = '→ Next Step';
-      }
+      } catch(err) { st.innerHTML = `❌ Error: ${err.message}`; }
+      finally { btn.disabled = false; btn.textContent = '→ Deploy Model'; }
     }
 
     document.getElementById('search').addEventListener('input', load);
     document.getElementById('category').addEventListener('change', load);
-    window.onclick = e => {
-      if(e.target.classList.contains('modal')) { closeModal(); closeCreate(); }
-    };
-    load();
+    window.onclick = e => { if(e.target.classList.contains('modal')) { closeModal(); closeCreate(); } };
+    
+    // Auto-refresh stats every 30s
+    load(); loadStats();
+    setInterval(loadStats, 30000);
   </script>
 </body>
 </html>
