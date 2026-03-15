@@ -16,6 +16,8 @@
       --text-secondary: #94A3B8;
       --border: rgba(34, 211, 238, 0.3);
       --radius: 12px;
+      --live: #ef4444;
+      --live-orange: #f97316;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -47,11 +49,19 @@
     .filters input, .filters select { flex: 1; min-width: 200px; padding: 16px 20px; font-size: 15px; border: 1px solid var(--border); border-radius: var(--radius); background: rgba(15, 23, 42, 0.8); color: var(--text); }
     .filters input:focus, .filters select:focus { outline: none; border-color: var(--primary); background: rgba(15, 23, 42, 0.95); }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 28px; }
-    .card { background: var(--bg-card); backdrop-filter: blur(20px); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; transition: all 0.3s; }
+    .card { background: var(--bg-card); backdrop-filter: blur(20px); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; transition: all 0.3s; position: relative; overflow: hidden; }
     .card:hover { transform: translateY(-8px); border-color: var(--primary-light); box-shadow: 0 20px 60px rgba(6, 182, 212, 0.4); }
     .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
     .card-title { font-size: 1.3rem; font-weight: 700; flex: 1; }
     .badge { background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .badge-live { 
+      background: linear-gradient(135deg, var(--live), var(--live-orange)); 
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+      50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+    }
     .description { font-size: 14px; color: var(--text-secondary); margin: 16px 0; line-height: 1.6; }
     .tags { display: flex; gap: 8px; flex-wrap: wrap; margin: 20px 0; }
     .tag { background: rgba(6, 182, 212, 0.15); color: var(--primary-light); padding: 6px 12px; border-radius: 6px; font-size: 12px; }
@@ -97,20 +107,41 @@
     .wallet-section input { width: 100%; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: rgba(15, 23, 42, 0.9); color: var(--primary-light); font-family: monospace; font-size: 13px; }
     .wallet-warning { font-size: 12px; color: var(--text-secondary); margin-top: 8px; }
     .loading, .empty { text-align: center; font-size: 18px; grid-column: 1 / -1; color: var(--text-secondary); padding: 60px; }
+    .sync-status { 
+      text-align: center; 
+      padding: 12px 24px; 
+      margin-bottom: 20px; 
+      background: rgba(6, 182, 212, 0.1); 
+      border: 1px solid var(--border); 
+      border-radius: var(--radius);
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .sync-status.live { 
+      background: rgba(239, 68, 68, 0.1); 
+      border-color: var(--live);
+      color: var(--live);
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
       <h1>🔷 OpenGradient Catalog</h1>
-      <p class="subtitle">Decentralized AI Model Hub</p>
+      <p class="subtitle">Decentralized AI Model Hub • Live Sync Every 24h</p>
     </header>
+
+    <div class="sync-status" id="syncStatus">
+      🔄 Loading sync status...
+    </div>
+
     <div class="stats-bar" id="statsBar">
       <div class="stat-item"><span class="stat-value" id="statModels">-</span><span class="stat-label">Total Models</span></div>
+      <div class="stat-item"><span class="stat-value" id="statLive">-</span><span class="stat-label">🔥 Live</span></div>
       <div class="stat-item"><span class="stat-value" id="statLikes">-</span><span class="stat-label">Total Likes</span></div>
       <div class="stat-item"><span class="stat-value" id="statInferences">-</span><span class="stat-label">Inferences</span></div>
-      <div class="stat-item"><span class="stat-value" id="statCategories">-</span><span class="stat-label">Categories</span></div>
     </div>
+
     <div class="filters">
       <input type="text" id="search" placeholder="🔍 Search models...">
       <select id="category">
@@ -121,7 +152,13 @@
         <option value="multimodal">Multimodal</option>
         <option value="protocol">Protocol Optimization</option>
       </select>
+      <select id="sourceFilter">
+        <option value="all">All Sources</option>
+        <option value="live">🔥 Live Only</option>
+        <option value="base">📦 Base Only</option>
+      </select>
     </div>
+
     <div class="grid" id="grid"><p class="loading">⏳ Loading models...</p></div>
   </div>
 
@@ -197,27 +234,53 @@
     const API = '';
     let curModel = null, sessId = null;
 
+    async function loadSyncStatus() {
+      try {
+        const r = await fetch(`${API}/api/stats`);
+        const s = await r.json();
+        const syncDiv = document.getElementById('syncStatus');
+        if (s.last_sync) {
+          const lastSync = new Date(s.last_sync);
+          const hoursAgo = ((Date.now() - lastSync.getTime()) / (1000 * 60 * 60)).toFixed(1);
+          syncDiv.innerHTML = `🔄 Last sync: ${hoursAgo}h ago • +${s.sync_added || 0} models added`;
+          syncDiv.className = hoursAgo < 24 ? 'sync-status' : 'sync-status live';
+        } else {
+          syncDiv.innerHTML = '⏳ Next sync in progress...';
+        }
+      } catch(e) { console.error('Sync status error:', e); }
+    }
+
     async function loadStats() {
       try {
         const r = await fetch(`${API}/api/stats`);
         const s = await r.json();
         document.getElementById('statModels').textContent = s.total_models || '-';
+        document.getElementById('statLive').textContent = s.live_models || '0';
         document.getElementById('statLikes').textContent = (s.total_likes || 0).toLocaleString();
         document.getElementById('statInferences').textContent = (s.total_inferences || 0).toLocaleString();
-        document.getElementById('statCategories').textContent = s.categories || '-';
       } catch(e) { console.error('Stats error:', e); }
     }
 
     async function load() {
-      const s = document.getElementById('search').value, c = document.getElementById('category').value;
+      const s = document.getElementById('search').value;
+      const c = document.getElementById('category').value;
+      const src = document.getElementById('sourceFilter').value;
       const p = new URLSearchParams();
       if(c!=='all') p.append('category', c);
       if(s) p.append('search', s);
+      if(src==='live') p.append('live_only', 'true');
+      
       try {
         const r = await fetch(`${API}/api/models?${p}`), m = await r.json();
         document.getElementById('grid').innerHTML = m.length ? m.map(x=>`
-          <div class="card">
-            <div class="card-header"><h3 class="card-title">${x.name}</h3><span class="badge">${x.category}</span></div>
+          <div class="card" data-model-id="${x.id}">
+            <div class="card-header">
+              <h3 class="card-title">${x.name}</h3>
+              <div style="display:flex;gap:6px;align-items:center;">
+                ${x.is_live ? '<span class="badge badge-live">🔥 LIVE</span>' : ''}
+                <span class="badge">${x.category}</span>
+              </div>
+            </div>
             <p class="description">${x.description}</p>
             <div class="tags">${x.tags.slice(0,4).map(t=>`<span class="tag">#${t}</span>`).join('')}</div>
             <div class="stats"><span>⭐ ${x.stats.likes}</span><span>🔄 ${x.stats.inferences}</span></div>
@@ -227,6 +290,7 @@
             </div>
           </div>`).join('') : '<p class="empty">No models found</p>';
         loadStats();
+        loadSyncStatus();
       } catch(e) {
         document.getElementById('grid').innerHTML = '<p class="empty">❌ Error loading models</p>';
       }
@@ -238,8 +302,9 @@
       document.getElementById('chatInput').value = '';
       fetch(`${API}/api/models/${id}`).then(r=>r.json()).then(m=>{
         document.getElementById('chatTitle').textContent = `💬 Chat: ${m.id}`;
+        const liveBadge = m.is_live ? ' 🔥 LIVE' : '';
         document.getElementById('chatSidebar').innerHTML = `
-          <strong>${m.name}</strong>
+          <strong>${m.name}${liveBadge}</strong>
           <div style="margin:10px 0;"><strong>Category:</strong> ${m.category}</div>
           <div style="margin:10px 0;"><strong>Description:</strong> ${m.description}</div>
           <div style="margin:10px 0;"><strong>Tags:</strong> ${m.tags.join(', ')}</div>
@@ -297,14 +362,13 @@
           if(x.status==='completed') {
             clearInterval(poll);
             st.innerHTML += `<br>✅ Model created: <strong>${x.result?.model_id}</strong>`;
-            // 🔥 АВТО-СКРОЛЛ К СОЗДАННОЙ МОДЕЛИ
             setTimeout(()=>{
               closeCreate();
               load().then(()=>{
                 setTimeout(()=>{
                   const cards = document.querySelectorAll('.card');
                   cards.forEach(card=>{
-                    if(card.textContent.includes(x.result?.model_id)){
+                    if(card.dataset.modelId === x.result?.model_id){
                       card.scrollIntoView({behavior:'smooth', block:'center'});
                       card.style.boxShadow = '0 0 30px #06B6D4';
                       card.style.transform = 'scale(1.05)';
@@ -328,9 +392,11 @@
 
     document.getElementById('search').addEventListener('input', load);
     document.getElementById('category').addEventListener('change', load);
+    document.getElementById('sourceFilter').addEventListener('change', load);
     window.onclick = e => { if(e.target.classList.contains('modal')) { closeModal(); closeCreate(); } };
-    load(); loadStats();
+    load(); loadStats(); loadSyncStatus();
     setInterval(loadStats, 30000);
+    setInterval(loadSyncStatus, 60000);
   </script>
 </body>
 </html>
