@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🔷 OpenGradient Catalog</title>
+  <style>
+    :root { --bg:#FF8C00; --card:#E67E00; --text:#fff; --border:2px solid #fff; --radius:4px; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; padding:20px; }
+    .container { max-width:1200px; margin:0 auto; }
+    header { text-align:center; margin-bottom:30px; }
+    h1 { font-size:2rem; margin-bottom:10px; }
+    .filters { display:flex; gap:15px; margin-bottom:30px; flex-wrap:wrap; }
+    .filters input, .filters select { padding:12px; font-size:16px; border:var(--border); border-radius:var(--radius); background:#fff; color:var(--bg); min-width:200px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:20px; }
+    .card { background:var(--card); border:var(--border); border-radius:var(--radius); padding:20px; }
+    .card-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; }
+    .card-title { font-size:1.1rem; flex:1; }
+    .badge { background:#fff; color:var(--bg); padding:4px 10px; border-radius:var(--radius); font-size:12px; font-weight:bold; }
+    .description { font-size:14px; opacity:0.9; margin:12px 0; line-height:1.4; }
+    .tags { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+    .tag { background:rgba(0,0,0,0.2); padding:3px 8px; border-radius:var(--radius); font-size:12px; }
+    .stats { display:flex; gap:15px; font-size:13px; margin-bottom:15px; opacity:0.9; }
+    .buttons { display:flex; gap:10px; }
+    .btn { flex:1; text-align:center; padding:10px; border-radius:var(--radius); text-decoration:none; font-weight:bold; font-size:14px; cursor:pointer; border:none; }
+    .btn-primary { background:#fff; color:var(--bg); }
+    .btn-secondary { background:var(--bg); color:#fff; border:var(--border); }
+    .modal { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.8); z-index:100; align-items:center; justify-content:center; padding:20px; }
+    .modal.active { display:flex; }
+    .modal-content { background:var(--card); border:var(--border); border-radius:var(--radius); padding:20px; max-width:600px; width:100%; max-height:90vh; overflow-y:auto; }
+    .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; }
+    .modal-close { background:none; border:none; color:#fff; font-size:24px; cursor:pointer; }
+    .messages { margin-bottom:15px; max-height:400px; overflow-y:auto; }
+    .message { margin-bottom:10px; padding:10px 14px; border-radius:var(--radius); max-width:80%; }
+    .message.user { background:#fff; color:var(--bg); margin-left:auto; }
+    .message.bot { background:rgba(255,255,255,0.2); }
+    .input-area { display:flex; gap:10px; }
+    .input-area input { flex:1; padding:12px; border:var(--border); border-radius:var(--radius); background:#fff; color:var(--bg); }
+    .input-area button { padding:12px 20px; background:#fff; color:var(--bg); border:none; border-radius:var(--radius); cursor:pointer; font-weight:bold; }
+    .form-group { margin-bottom:15px; }
+    .form-group label { display:block; margin-bottom:5px; font-size:14px; }
+    .form-group input, .form-group textarea, .form-group select { width:100%; padding:10px; border:var(--border); border-radius:var(--radius); background:#fff; color:var(--bg); font-size:14px; }
+    .form-group textarea { resize:vertical; min-height:80px; }
+    .loading, .empty { text-align:center; font-size:18px; grid-column:1/-1; opacity:0.8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🔷 OpenGradient Catalog</h1>
+      <p>Каталог AI-моделей с чат-ассистентом</p>
+    </header>
+    <div class="filters">
+      <input type="text" id="search" placeholder="🔍 Поиск...">
+      <select id="category">
+        <option value="all">Все категории</option>
+        <option value="defi">DeFi</option>
+        <option value="language">Language</option>
+        <option value="risk">Risk</option>
+        <option value="multimodal">Multimodal</option>
+      </select>
+    </div>
+    <div class="grid" id="grid"><p class="loading">⏳ Загрузка...</p></div>
+  </div>
+
+  <!-- Chat Modal -->
+  <div class="modal" id="chatModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="chatTitle">💬 Чат</h3>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div id="chatInfo" style="margin-bottom:10px;font-size:13px;opacity:0.9;"></div>
+      <div class="messages" id="chatMsgs"></div>
+      <div class="input-area">
+        <input type="text" id="chatInput" placeholder="Вопрос..." onkeypress="if(event.key==='Enter')sendChat()">
+        <button onclick="sendChat()">➤</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Modal -->
+  <div class="modal" id="createModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>🛠 Создание</h3>
+        <button class="modal-close" onclick="closeCreate()">&times;</button>
+      </div>
+      <form id="createForm" onsubmit="doCreate(event)">
+        <div class="form-group"><label>Название *</label><input type="text" id="cName" required></div>
+        <div class="form-group"><label>Описание *</label><textarea id="cDesc" required></textarea></div>
+        <div class="form-group"><label>Категория</label><select id="cCat"><option>DeFi</option><option>Language</option><option>Risk</option><option>Multimodal</option></select></div>
+        <div class="form-group"><label>Базовая модель</label><input type="text" id="cBase"></div>
+        <button type="submit" class="btn btn-primary" style="width:100%">→ Создать</button>
+      </form>
+      <div id="cStatus" style="margin-top:15px;font-size:14px;"></div>
+    </div>
+  </div>
+
+  <script>
+    const API = '';
+    let curModel = null, sessId = null;
+
+    async function load() {
+      const s = document.getElementById('search').value, c = document.getElementById('category').value;
+      const p = new URLSearchParams();
+      if(c!=='all') p.append('category', c);
+      if(s) p.append('search', s);
+      try {
+        const r = await fetch(`${API}/api/models?${p}`), m = await r.json();
+        document.getElementById('grid').innerHTML = m.length ? m.map(x=>`
+          <div class="card">
+            <div class="card-header"><h3 class="card-title">${x.name}</h3><span class="badge">${x.category}</span></div>
+            <p class="description">${x.description}</p>
+            <div class="tags">${x.tags.slice(0,3).map(t=>`<span class="tag">#${t}</span>`).join('')}</div>
+            <div class="stats"><span>⭐ ${x.stats.likes}</span><span>🔄 ${x.stats.inferences}</span></div>
+            <div class="buttons">
+              <button class="btn btn-primary" onclick="openChat('${x.id}')">💬 Спросить</button>
+              <button class="btn btn-secondary" onclick="openCreate('${x.id}')">🛠 Создать</button>
+            </div>
+          </div>`).join('') : '<p class="empty">Не найдено</p>';
+      } catch(e) { document.getElementById('grid').innerHTML = '<p class="empty">❌ Ошибка</p>'; console.error(e); }
+    }
+
+    function openChat(id) {
+      curModel = id; sessId = null;
+      document.getElementById('chatMsgs').innerHTML = '';
+      document.getElementById('chatInput').value = '';
+      fetch(`${API}/api/models/${id}`).then(r=>r.json()).then(m=>{
+        document.getElementById('chatTitle').textContent = `💬 ${m.name}`;
+        document.getElementById('chatInfo').innerHTML = `<b>Категория:</b> ${m.category}<br><b>Теги:</b> ${m.tags.join(', ')}`;
+      });
+      document.getElementById('chatModal').classList.add('active');
+    }
+    function closeModal() { document.getElementById('chatModal').classList.remove('active'); curModel = null; }
+    async function sendChat() {
+      const inp = document.getElementById('chatInput'), q = inp.value.trim();
+      if(!q) return;
+      const msgs = document.getElementById('chatMsgs');
+      msgs.innerHTML += `<div class="message user">${q}</div>`;
+      inp.value = '';
+      try {
+        const r = await fetch(`${API}/api/chat`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query:q, model_id:curModel, session_id:sessId})}),
+              d = await r.json();
+        sessId = d.session_id;
+        msgs.innerHTML += `<div class="message bot">${d.reply.replace(/\n/g,'<br>')}</div>`;
+        msgs.scrollTop = msgs.scrollHeight;
+      } catch(e) { msgs.innerHTML += `<div class="message bot">❌ Ошибка</div>`; }
+    }
+
+    function openCreate(base) {
+      document.getElementById('createForm').reset();
+      document.getElementById('cBase').value = base || '';
+      document.getElementById('cStatus').innerHTML = '';
+      document.getElementById('createModal').classList.add('active');
+    }
+    function closeCreate() { document.getElementById('createModal').classList.remove('active'); }
+    async function doCreate(e) {
+      e.preventDefault();
+      const btn = e.target.querySelector('button'), st = document.getElementById('cStatus');
+      btn.disabled = true; btn.textContent = '⏳...';
+      try {
+        const r = await fetch(`${API}/api/models/create`, {method:'POST', headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({name:document.getElementById('cName').value, description:document.getElementById('cDesc').value, category:document.getElementById('cCat').value, base_model:document.getElementById('cBase').value})}),
+          d = await r.json();
+        st.innerHTML = `📋 ${d.task_id}<br>Статус: ${d.status}`;
+        const poll = setInterval(async ()=>{
+          const x = await fetch(`${API}/api/tasks/${d.task_id}`).then(r=>r.json());
+          st.innerHTML = `📋 ${d.task_id}<br>Статус: <b>${x.status}</b>`;
+          if(x.status==='completed') { clearInterval(poll); st.innerHTML+=`<br>✅ ${x.result?.model_id}`; setTimeout(()=>{closeCreate();load();},2000); }
+        }, 2000);
+      } catch(err) { st.innerHTML = `❌ ${err.message}`; }
+      finally { btn.disabled = false; btn.textContent = '→ Создать'; }
+    }
+
+    document.getElementById('search').addEventListener('input', load);
+    document.getElementById('category').addEventListener('change', load);
+    window.onclick = e => { if(e.target.classList.contains('modal')) { closeModal(); closeCreate(); } };
+    load();
+  </script>
+</body>
+</html>
