@@ -6,4 +6,4 @@ python-multipart==0.0.6
 psycopg2-binary==2.9.9
 sqlalchemy==2.0.25
 apscheduler==3.10.4
-opengradient>=0.8.0  
+
