@@ -3,6 +3,6 @@ uvicorn[standard]==0.27.0
 pydantic==2.5.3
 httpx==0.26.0
 python-multipart==0.0.6
-psycopg2-binary==2.9.9          # ← ДОБАВИТЬ ЭТУ СТРОКУ
-sqlalchemy==2.0.25               # ← ДОБАВИТЬ ЭТУ СТРОКУ
-apscheduler==3.10.4
+psycopg2-binary==2.9.9     ← Важно!
+sqlalchemy==2.0.25         ← Важно!
+apscheduler==3.10.4        ← Для авто-синхронизации
