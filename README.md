@@ -1,14 +1,24 @@
 ## ✅ Implemented Features
 
-### 🎨 Interface
-- **Minimal UI:** Clean design focused on core actions.
-- **Send Button:** Interactive element ready for API triggers.
-- **Responsive:** Works on mobile and desktop.
+### 🎨 Frontend (static/index.html)
+- **Model Catalog UI**: Grid display of AI models with cards
+- **Live Metrics**: Total Models, Live count, Likes, Inferences
+- **Category Filters**: DeFi, Language Models, Risk Models, Multimodal, Protocol Optimization
+- **Source Filters**: Base only, Live only toggle
+- **Loading States**: Visual feedback during data fetch
 
-### 🚀 Infrastructure
-- **Live Deployment:** Hosted on Railway.
-- **Env Config:** Supports `.env` for API keys.
+### ⚙️ Backend (main.py)
+- **FastAPI Server**: Async Python backend with Uvicorn
+- **Static File Serving**: Root route delivers `index.html`
+- **CORS Ready**: Configured for external API calls
+- **Health Endpoint**: `/` returns the catalog interface
 
-### 🔗 Integration
-- **OpenGradient Ready:** Structure prepared for SDK.
-- **Credits:** Developer attribution included.
+### 🐳 Deployment
+- **Dockerfile**: Containerized setup for consistent deployment
+- **Railway Compatible**: Runs on `*.up.railway.app`
+- **Dependencies**: `requirements.txt` with FastAPI, httpx, SQLAlchemy
+
+### 🔗 Integration Ready
+- **OpenGradient API**: Structure prepared for model data fetching
+- **HTTP Client**: `httpx` included for async API requests
+- **Scheduler**: `APScheduler` for periodic data sync tasks
