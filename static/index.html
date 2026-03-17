@@ -362,22 +362,30 @@
           if(x.status==='completed') {
             clearInterval(poll);
             st.innerHTML += `<br>✅ Model created: <strong>${x.result?.model_id}</strong>`;
-            setTimeout(()=>{
+            
+            // ✅ FIX: Wait for DB sync, then refresh list and highlight new model
+            setTimeout(async () => {
               closeCreate();
-              load().then(()=>{
-                setTimeout(()=>{
-                  const cards = document.querySelectorAll('.card');
-                  cards.forEach(card=>{
-                    if(card.dataset.modelId === x.result?.model_id){
-                      card.scrollIntoView({behavior:'smooth', block:'center'});
-                      card.style.boxShadow = '0 0 30px #06B6D4';
-                      card.style.transform = 'scale(1.05)';
-                      setTimeout(()=>{ card.style.boxShadow = ''; card.style.transform = ''; }, 3000);
-                    }
-                  });
-                }, 100);
-              });
-            }, 1500);
+              await load(); // Refresh the list
+              
+              // Find and highlight the new model
+              setTimeout(() => {
+                const cards = document.querySelectorAll('.card');
+                const newModelId = x.result?.model_id;
+                cards.forEach(card => {
+                  if(card.dataset.modelId === newModelId) {
+                    card.scrollIntoView({behavior:'smooth', block:'center'});
+                    card.style.boxShadow = '0 0 30px #06B6D4';
+                    card.style.transform = 'scale(1.05)';
+                    setTimeout(() => { 
+                      card.style.boxShadow = ''; 
+                      card.style.transform = ''; 
+                    }, 3000);
+                  }
+                });
+              }, 500);
+            }, 2000); // Wait 2s for DB to sync
+            
           } else if(x.status==='failed') {
             clearInterval(poll);
             st.innerHTML += `<br>❌ Failed: ${x.error}`;
