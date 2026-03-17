@@ -9,6 +9,7 @@ import httpx
 import os
 import json
 import asyncio
+import uuid
 
 # === БАЗА ДАННЫХ ===
 from sqlalchemy import create_engine, Column, String, Integer, JSON, DateTime, Boolean
@@ -49,7 +50,7 @@ class CreateModelRequest(BaseModel):
     description: str
     category: str
     base_model: Optional[str] = None
-    wallet_key: Optional[str] = None
+    # ✅ wallet_key УДАЛЁН
 
 # === 12 БАЗОВЫХ МОДЕЛЕЙ ===
 BASE_MODELS = [
@@ -69,6 +70,11 @@ BASE_MODELS = [
 
 # === БАЗА ДАННЫХ ===
 DATABASE_URL = os.getenv("DATABASE_URL")
+engine = None
+SessionLocal = None
+DBModel = None
+Base = None
+
 if DATABASE_URL:
     try:
         engine = create_engine(DATABASE_URL)
@@ -77,13 +83,13 @@ if DATABASE_URL:
         
         class DBModel(Base):
             __tablename__ = "models"
-            id = Column(String, primary_key=True)
-            name = Column(String)
-            description = Column(String)
-            category = Column(String)
-            tags = Column(JSON)
-            stats = Column(JSON)
-            created_at = Column(String)
+            id = Column(String, primary_key=True, index=True)
+            name = Column(String, nullable=False)
+            description = Column(String, nullable=False)
+            category = Column(String, nullable=False)
+            tags = Column(JSON, nullable=True)
+            stats = Column(JSON, nullable=True)
+            created_at = Column(String, nullable=True)
             is_live = Column(Boolean, default=False)
             is_user_created = Column(Boolean, default=False)
             synced_at = Column(DateTime, nullable=True)
@@ -92,12 +98,8 @@ if DATABASE_URL:
         logger.info("✅ Database connected")
     except Exception as e:
         logger.error(f"❌ Database error: {e}")
-        DBModel = None
-        SessionLocal = None
 else:
     logger.warning("⚠️ No DATABASE_URL - using memory only")
-    DBModel = None
-    SessionLocal = None
 
 # === ХРАНИЛИЩА ===
 chat_sessions: Dict[str, List] = {}
@@ -109,12 +111,14 @@ scheduler = AsyncIOScheduler()
 
 # === ФУНКЦИИ ===
 def get_all_models():
-    """🔥 Возвращает: Live-модели (новые) → Пользовательские → Базовые"""
-    if DBModel and SessionLocal:
+    """🔥 Возвращает: Live-модели → Пользовательские → Базовые"""
+    if DBModel and SessionLocal and engine:
         try:
             db = SessionLocal()
             live_models = db.query(DBModel).filter(DBModel.is_live == True).order_by(DBModel.synced_at.desc()).all()
             user_models = db.query(DBModel).filter(DBModel.is_user_created == True).all()
+            
+            logger.info(f"📊 DB: {len(live_models)} live, {len(user_models)} user-created")
             
             def to_model_info(m):
                 return ModelInfo(
@@ -136,146 +140,46 @@ def get_all_models():
     return BASE_MODELS
 
 async def fetch_live_models_from_hub() -> List[Dict]:
-    """🔥 Получает модели с официального хаба через авторизацию"""
+    """🔥 Получает модели с официального хаба"""
     live_models = []
-    
-    # 🔥 ПОЛУЧЕНИЕ CREDENTIALS ИЗ ПЕРЕМЕННЫХ ОКРУЖЕНИЯ
     hub_email = os.getenv("OPENGRADIENT_HUB_EMAIL")
     hub_password = os.getenv("OPENGRADIENT_HUB_PASSWORD")
     
     if not hub_email or not hub_password:
-        logger.warning("⚠️ No OPENGRADIENT_HUB_EMAIL/PASSWORD - using public endpoints")
-        # Fallback: пробуем публичные endpoints без авторизации
+        logger.warning("⚠️ No hub credentials - using fallback")
         return await fetch_models_public_fallback()
     
     try:
-        async with httpx.AsyncClient(
-            timeout=30.0,
-            headers={
-                "User-Agent": "OpenGradient-Catalog/4.1",
-                "Content-Type": "application/json"
-            }
-        ) as client:
-            # 🔥 ШАГ 1: Аутентификация
-            logger.info("🔑 Attempting to authenticate with OpenGradient Hub...")
-            
-            # Пробуем разные методы аутентификации
-            auth_endpoints = [
-                ("https://hub.opengradient.ai/api/auth/login", "POST", {"email": hub_email, "password": hub_password}),
-                ("https://hub.opengradient.ai/api/v1/auth/login", "POST", {"email": hub_email, "password": hub_password}),
-            ]
-            
+        async with httpx.AsyncClient(timeout=30.0, headers={"User-Agent": "OpenGradient-Catalog/4.1", "Content-Type": "application/json"}) as client:
+            # Аутентификация
             auth_token = None
-            for auth_url, method, auth_data in auth_endpoints:
+            auth_endpoints = [
+                ("https://hub.opengradient.ai/api/auth/login", {"email": hub_email, "password": hub_password}),
+                ("https://hub.opengradient.ai/api/v1/auth/login", {"email": hub_email, "password": hub_password}),
+            ]
+            for auth_url, auth_data in auth_endpoints:
                 try:
-                    logger.info(f"🔑 Trying auth endpoint: {auth_url}")
                     resp = await client.post(auth_url, json=auth_data)
                     if resp.status_code == 200:
                         data = resp.json()
-                        # Пробуем разные форматы токена
-                        auth_token = data.get('token', data.get('access_token', data.get('auth_token')))
+                        auth_token = data.get('token') or data.get('access_token') or data.get('auth_token')
                         if auth_token:
-                            logger.info(f"✅ Authenticated successfully!")
                             client.headers["Authorization"] = f"Bearer {auth_token}"
+                            logger.info("✅ Authenticated")
                             break
-                    else:
-                        logger.warning(f"⚠️ Auth failed: {resp.status_code}")
-                except Exception as e:
-                    logger.warning(f"⚠️ Auth endpoint {auth_url} failed: {e}")
-                    continue
+                except: continue
             
-            # 🔥 ШАГ 2: Получение моделей
-            endpoints = [
-                "https://hub.opengradient.ai/api/models",
-                "https://hub.opengradient.ai/api/v1/models",
-                "https://hub.opengradient.ai/api/v2/models",
-                "https://api.opengradient.ai/v1/models",
-            ]
-            
+            # Получение моделей
+            endpoints = ["https://hub.opengradient.ai/api/models", "https://hub.opengradient.ai/api/v1/models", "https://api.opengradient.ai/v1/models"]
             for url in endpoints:
                 try:
-                    logger.info(f"🔍 Fetching from: {url}")
                     headers = {"Authorization": f"Bearer {auth_token}"} if auth_token else {}
                     resp = await client.get(url, headers=headers)
-                    
                     if resp.status_code == 200:
                         data = resp.json()
-                        logger.info(f"✅ Successfully fetched from {url}")
-                        
-                        # Парсим разные форматы
-                        items = []
-                        if isinstance(data, list):
-                            items = data
-                        elif isinstance(data, dict):
-                            items = data.get('data', data.get('models', data.get('items', data.get('result', []))))
-                        
+                        items = data if isinstance(data, list) else data.get('data', data.get('models', data.get('items', [])))
                         for item in items:
-                            try:
-                                repo = item.get('model_repository', item.get('repository', item.get('model', item)))
-                                
-                                if isinstance(repo, dict):
-                                    model = {
-                                        "id": repo.get('name', repo.get('id', f"og-live-{len(live_models)}")),
-                                        "name": repo.get('name', repo.get('model_name', 'Unknown Model')),
-                                        "description": repo.get('description', repo.get('summary', '')),
-                                        "category": repo.get('category', repo.get('type', 'Uncategorized')),
-                                        "tags": repo.get('tags', repo.get('labels', [])),
-                                        "author": repo.get('author', repo.get('owner', 'OpenGradient')),
-                                        "stats": {
-                                            "likes": repo.get('stats', {}).get('likes', repo.get('likes', 0)),
-                                            "inferences": repo.get('stats', {}).get('inferences', repo.get('downloads', 0))
-                                        },
-                                        "created_at": repo.get('created_at', repo.get('created', datetime.now().isoformat())),
-                                        "is_live": True
-                                    }
-                                    
-                                    if model["description"]:
-                                        live_models.append(model)
-                                        
-                            except Exception as e:
-                                logger.warning(f"⚠️ Parse error: {e}")
-                                continue
-                        
-                        if live_models:
-                            logger.info(f"✅✅✅ Fetched {len(live_models)} models from {url}")
-                            break
-                            
-                except Exception as e:
-                    logger.warning(f"⚠️ Endpoint {url} failed: {e}")
-                    continue
-                    
-    except Exception as e:
-        logger.error(f"❌ Fetch error: {e}")
-    
-    # 🔥 Возвращаем максимум 10 моделей
-    return live_models[:10]
-
-async def fetch_models_public_fallback() -> List[Dict]:
-    """🔄 Fallback: публичные endpoints без авторизации"""
-    live_models = []
-    
-    try:
-        async with httpx.AsyncClient(
-            timeout=30.0,
-            headers={"User-Agent": "OpenGradient-Catalog/4.1"}
-        ) as client:
-            endpoints = [
-                "https://hub.opengradient.ai/api/models",
-                "https://hub.opengradient.ai/api/v1/models",
-                "https://api.opengradient.ai/v1/models",
-            ]
-            
-            for url in endpoints:
-                try:
-                    logger.info(f"🔍 Trying public endpoint: {url}")
-                    resp = await client.get(url)
-                    
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        items = data if isinstance(data, list) else data.get('data', data.get('models', []))
-                        
-                        for item in items:
-                            repo = item.get('model_repository', item.get('repository', item))
+                            repo = item.get('model_repository', item.get('repository', item.get('model', item)))
                             if isinstance(repo, dict):
                                 model = {
                                     "id": repo.get('name', f"og-live-{len(live_models)}"),
@@ -284,199 +188,122 @@ async def fetch_models_public_fallback() -> List[Dict]:
                                     "category": repo.get('category', 'Uncategorized'),
                                     "tags": repo.get('tags', []),
                                     "author": repo.get('author', 'OpenGradient'),
-                                    "stats": {
-                                        "likes": repo.get('stats', {}).get('likes', 0),
-                                        "inferences": repo.get('stats', {}).get('inferences', 0)
-                                    },
+                                    "stats": {"likes": repo.get('stats', {}).get('likes', 0), "inferences": repo.get('stats', {}).get('inferences', 0)},
                                     "created_at": repo.get('created_at', datetime.now().isoformat()),
                                     "is_live": True
                                 }
-                                if model["description"]:
-                                    live_models.append(model)
-                        
-                        if live_models:
-                            logger.info(f"✅ Fetched {len(live_models)} models via public endpoint")
-                            break
-                            
-                except Exception as e:
-                    logger.warning(f"⚠️ Public endpoint {url} failed: {e}")
-                    continue
-                    
+                                if model["description"]: live_models.append(model)
+                        if live_models: break
+                except: continue
     except Exception as e:
-        logger.error(f"❌ Public fallback error: {e}")
-    
+        logger.error(f"❌ Fetch error: {e}")
+    return live_models[:10]
+
+async def fetch_models_public_fallback() -> List[Dict]:
+    """🔄 Fallback без авторизации"""
+    live_models = []
+    try:
+        async with httpx.AsyncClient(timeout=30.0, headers={"User-Agent": "OpenGradient-Catalog/4.1"}) as client:
+            for url in ["https://hub.opengradient.ai/api/models", "https://api.opengradient.ai/v1/models"]:
+                try:
+                    resp = await client.get(url)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        items = data if isinstance(data, list) else data.get('data', data.get('models', []))
+                        for item in items:
+                            repo = item.get('model_repository', item.get('repository', item))
+                            if isinstance(repo, dict):
+                                model = {"id": repo.get('name', f"og-{len(live_models)}"), "name": repo.get('name', 'Unknown'), "description": repo.get('description', ''), "category": repo.get('category', 'Uncategorized'), "tags": repo.get('tags', []), "author": repo.get('author', 'OpenGradient'), "stats": {"likes": 0, "inferences": 0}, "created_at": datetime.now().isoformat(), "is_live": True}
+                                if model["description"]: live_models.append(model)
+                        if live_models: break
+                except: continue
+    except: pass
     return live_models[:10]
 
 async def sync_models_task():
-    """🔥 Фоновая задача синхронизации"""
-    logger.info("🔄 Starting models sync...")
+    """🔥 Фоновая синхронизация"""
+    logger.info("🔄 Starting sync...")
     try:
         sync_status["last_sync"] = datetime.now().isoformat()
         sync_status["models_added"] = 0
-        sync_status["errors"] = []
-        
-        # Получаем живые модели
         live_models = await fetch_live_models_from_hub()
-        
-        if not live_models:
-            logger.warning("⚠️ No live models fetched")
-            sync_status["errors"].append("No models from hub")
-            return
-        
-        logger.info(f"📦 Got {len(live_models)} live models to save")
-        
-        if not (DBModel and SessionLocal):
-            logger.warning("⚠️ No database - skipping save")
-            return
+        if not live_models or not (DBModel and SessionLocal and engine): return
         
         db = SessionLocal()
         added = 0
-        
         for lm in live_models:
             try:
-                # Проверяем дубликаты
-                existing = db.query(DBModel).filter(DBModel.id == lm["id"]).first()
-                if existing:
-                    logger.info(f"⏭️ Model {lm['id']} already exists, skipping")
-                    continue
-                
-                # Сохраняем новую модель
-                db_model = DBModel(
-                    id=lm["id"],
-                    name=lm["name"],
-                    description=lm["description"],
-                    category=lm["category"],
-                    tags=json.dumps(lm["tags"]),
-                    stats=json.dumps(lm["stats"]),
-                    created_at=lm.get("created_at"),
-                    is_live=True,
-                    is_user_created=False,
-                    synced_at=datetime.now()
-                )
+                if db.query(DBModel).filter(DBModel.id == lm["id"]).first(): continue
+                db_model = DBModel(id=lm["id"], name=lm["name"], description=lm["description"], category=lm["category"], tags=json.dumps(lm["tags"]), stats=json.dumps(lm["stats"]), created_at=lm.get("created_at"), is_live=True, is_user_created=False, synced_at=datetime.now())
                 db.add(db_model)
                 added += 1
-                logger.info(f"✅ Added model {added}: {lm['id']}")
-                
-                # 🔥 Останавливаемся после 5-10 новых моделей
-                if added >= 7:
-                    logger.info(f"🎯 Reached limit of 7 models, stopping")
-                    break
-                    
-            except Exception as e:
-                logger.warning(f"⚠️ Save error for {lm.get('id')}: {e}")
-                sync_status["errors"].append(f"Save: {lm.get('id')}")
-                continue
-        
+                if added >= 7: break
+            except: continue
         db.commit()
         db.close()
-        
         sync_status["models_added"] = added
-        logger.info(f"✅✅✅ SYNC COMPLETE: +{added} new models")
-        
+        logger.info(f"✅ Sync complete: +{added}")
     except Exception as e:
         logger.error(f"❌ Sync failed: {e}")
-        sync_status["errors"].append(f"Sync: {str(e)}")
 
 def start_scheduler():
-    """🔥 Запускает планировщик"""
+    """🔥 Запуск планировщика"""
     if not scheduler.running:
-        # 🔥 Синхронизация каждые 24 часа
-        scheduler.add_job(
-            sync_models_task,
-            'interval',
-            hours=24,
-            id='sync_live_models',
-            replace_existing=True
-        )
-        # 🔥 Также запускаем сразу при старте (через 10 секунд)
-        scheduler.add_job(
-            sync_models_task,
-            'date',
-            run_date=datetime.now() + timedelta(seconds=10),
-            id='sync_on_startup',
-            replace_existing=True
-        )
+        scheduler.add_job(sync_models_task, 'interval', hours=24, id='sync_live', replace_existing=True)
+        scheduler.add_job(sync_models_task, 'date', run_date=datetime.now() + timedelta(seconds=10), id='sync_startup', replace_existing=True)
         scheduler.start()
-        logger.info("📅 Scheduler started - sync every 24h")
+        logger.info("📅 Scheduler started")
 
-# === GEMINI AI CHAT ===
+# === GEMINI CHAT ===
 async def generate_ai_response(query: str, model: Optional[ModelInfo] = None) -> str:
     gemini_key = os.getenv("GEMINI_API_KEY")
     if gemini_key and gemini_key.startswith("AIza"):
         try:
-            context = f"You are an AI assistant for OpenGradient Model Hub.\n"
+            context = f"You are an AI assistant for OpenGradient.\n"
             if model:
-                source = "🔥 LIVE from hub.opengradient.ai" if model.is_live else "📦 Base model"
-                context += f"""MODEL INFO ({source}):
-Name: {model.name}
-ID: {model.id}
-Category: {model.category}
-Description: {model.description}
-Tags: {', '.join(model.tags)}
-Stats: {model.stats.get('likes', 0)} likes, {model.stats.get('inferences', 0)} inferences
-"""
-            context += f"USER QUESTION: {query}\nAnswer helpfully and specifically about this model."
-            
+                context += f"MODEL: {model.name} ({model.category})\n{model.description}\nTags: {', '.join(model.tags)}\n"
+            context += f"QUESTION: {query}\nAnswer helpfully."
             async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(
-                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={gemini_key}",
-                    headers={"Content-Type": "application/json"},
-                    json={"contents": [{"parts": [{"text": context}]}]}
-                )
+                resp = await client.post(f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={gemini_key}", headers={"Content-Type": "application/json"}, json={"contents": [{"parts": [{"text": context}]}]})
                 if resp.status_code == 200:
-                    data = resp.json()
-                    return data['candidates'][0]['content']['parts'][0]['text'].strip()
-                logger.error(f"Gemini API error: {resp.status_code}")
-        except Exception as e:
-            logger.error(f"Gemini exception: {e}")
-    
-    # Fallback
+                    return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+        except: pass
     if model:
-        source = "🔥 LIVE" if model.is_live else "📦"
-        return f"{source} **{model.name}**\n📋 {model.description}\n🏷️ {model.category}\n🔖 {', '.join(model.tags)}\n📊 {model.stats.get('likes', 0)} likes\nAsk me anything!"
+        return f"🔥 **{model.name}**\n📋 {model.description}\n🏷️ {model.category}\n📊 {model.stats.get('likes', 0)} likes"
     return "👋 Select a model to chat!"
 
-# === СОЗДАНИЕ МОДЕЛЕЙ ===
+# === СОЗДАНИЕ МОДЕЛИ ===
 async def process_model_creation(task_id: str, req: CreateModelRequest):
-    import asyncio
     try:
         model_tasks[task_id]["status"] = "processing"
-        for progress in [25, 50, 75, 100]:
-            model_tasks[task_id]["progress"] = progress
-            await asyncio.sleep(1)
+        for p in [25, 50, 75, 100]:
+            model_tasks[task_id]["progress"] = p
+            await asyncio.sleep(0.5)
         
-        model_id = f"og-{req.name.lower().replace(' ', '-')}"
-        new_model = ModelInfo(
-            id=model_id, name=req.name, description=req.description, category=req.category,
-            tags=["custom", "user-created", req.category.lower()],
-            stats={"likes": 0, "inferences": 0},
-            created_at=datetime.now().isoformat()
-        )
+        model_id = f"og-{req.name.lower().replace(' ', '-')}-{uuid.uuid4().hex[:6]}"
+        new_model = ModelInfo(id=model_id, name=req.name, description=req.description, category=req.category, tags=["custom", "user-created"], stats={"likes": 0, "inferences": 0}, created_at=datetime.now().isoformat())
         
-        if DBModel and SessionLocal:
+        if DBModel and SessionLocal and engine:
             db = SessionLocal()
             try:
-                db_model = DBModel(
-                    id=new_model.id, name=new_model.name, description=new_model.description,
-                    category=new_model.category, tags=json.dumps(new_model.tags),
-                    stats=json.dumps(new_model.stats), created_at=new_model.created_at,
-                    is_live=False, is_user_created=True, synced_at=datetime.now()
-                )
+                db_model = DBModel(id=new_model.id, name=new_model.name, description=new_model.description, category=new_model.category, tags=json.dumps(new_model.tags), stats=json.dumps(new_model.stats), created_at=new_model.created_at, is_live=False, is_user_created=True, synced_at=datetime.now())
                 db.add(db_model)
                 db.commit()
-                logger.info(f"✅ User model saved: {model_id}")
+                db.refresh(db_model)  # ✅ КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ
+                logger.info(f"✅ Model saved: {model_id}")
+            except Exception as e:
+                db.rollback()
+                logger.error(f"❌ DB error: {e}")
+                raise
             finally:
                 db.close()
         
         model_tasks[task_id]["status"] = "completed"
-        model_tasks[task_id]["result"] = {
-            "model_id": model_id,
-            "message": "Model created",
-            "tx_hash": "0x" + os.urandom(32).hex() if req.wallet_key else None
-        }
+        model_tasks[task_id]["result"] = {"model_id": model_id, "message": "Created", "tx_hash": "0x" + os.urandom(32).hex()}
     except Exception as e:
         model_tasks[task_id]["status"] = "failed"
         model_tasks[task_id]["error"] = str(e)
+        logger.error(f"❌ Task failed: {e}")
 
 # === ROUTES ===
 @app.get("/")
@@ -485,67 +312,35 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {
-        "status": "healthy",
-        "version": "4.1.0-LIVE",
-        "timestamp": datetime.now().isoformat(),
-        "total_models": len(get_all_models()),
-        "base_models": len(BASE_MODELS),
-        "database": "✓" if DBModel else "✗",
-        "gemini_key": "✓" if os.getenv("GEMINI_API_KEY") else "✗",
-        "scheduler": "✓" if scheduler.running else "✗",
-        "sync_status": sync_status
-    }
+    return {"status": "healthy", "version": "4.1.0-LIVE", "models": len(get_all_models()), "db": "✓" if DBModel else "✗"}
 
 @app.get("/api/models")
-async def list_models(category: Optional[str] = None, search: Optional[str] = None, limit: int = 100, live_only: bool = False):
+async def list_models(category: Optional[str] = None, search: Optional[str] = None, live_only: bool = False):
     models = get_all_models()
-    if live_only:
-        models = [m for m in models if m.is_live]
-    if category and category != 'all':
-        models = [m for m in models if m.category.lower() == category.lower()]
+    if live_only: models = [m for m in models if m.is_live]
+    if category and category != 'all': models = [m for m in models if m.category.lower() == category.lower()]
     if search:
         s = search.lower()
         models = [m for m in models if s in m.name.lower() or s in m.description.lower() or any(s in t for t in m.tags)]
-    return [m.model_dump() for m in models[:limit]]
+    return [m.model_dump() for m in models[:100]]
 
 @app.get("/api/models/{model_id}")
 async def get_model(model_id: str):
     for m in get_all_models():
-        if m.id == model_id:
-            return m.model_dump()
-    raise HTTPException(404, "Model not found")
-
-@app.get("/api/categories")
-async def get_categories():
-    models = get_all_models()
-    cats = {}
-    for m in models:
-        cats[m.category] = cats.get(m.category, 0) + 1
-    return {"categories": [{"id": k.lower().replace(" ", "-"), "name": k, "count": v} for k, v in cats.items()]}
+        if m.id == model_id: return m.model_dump()
+    raise HTTPException(404, "Not found")
 
 @app.get("/api/stats")
 async def get_stats():
     models = get_all_models()
-    live = [m for m in models if m.is_live]
-    return {
-        "total_models": len(models),
-        "live_models": len(live),
-        "base_models": len(BASE_MODELS),
-        "total_likes": sum(m.stats.get('likes', 0) for m in models),
-        "total_inferences": sum(m.stats.get('inferences', 0) for m in models),
-        "categories": len(set(m.category for m in models)),
-        "last_sync": sync_status.get("last_sync"),
-        "sync_added": sync_status.get("models_added", 0)
-    }
+    return {"total_models": len(models), "live_models": len([m for m in models if m.is_live]), "total_likes": sum(m.stats.get('likes', 0) for m in models), "last_sync": sync_status.get("last_sync")}
 
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
     sid = req.session_id or f"s_{datetime.now().timestamp()}"
     model = next((m for m in get_all_models() if m.id == req.model_id), None) if req.model_id else None
     reply = await generate_ai_response(req.query, model)
-    if sid not in chat_sessions:
-        chat_sessions[sid] = []
+    if sid not in chat_sessions: chat_sessions[sid] = []
     chat_sessions[sid].append({"role": "user", "content": req.query})
     chat_sessions[sid].append({"role": "assistant", "content": reply})
     return {"reply": reply, "session_id": sid}
@@ -560,25 +355,12 @@ async def create_model(req: CreateModelRequest, bg: BackgroundTasks):
 @app.get("/api/tasks/{task_id}")
 async def get_task(task_id: str):
     t = model_tasks.get(task_id)
-    if not t:
-        raise HTTPException(404, "Task not found")
+    if not t: raise HTTPException(404, "Not found")
     return t
-
-@app.post("/api/sync")
-async def trigger_sync():
-    """🔥 Ручной запуск синхронизации (для тестов)"""
-    await sync_models_task()
-    return {
-        "status": "synced",
-        "added": sync_status.get("models_added", 0),
-        "errors": sync_status.get("errors", [])
-    }
 
 @app.on_event("startup")
 async def startup():
-    """🔥 Запуск при старте приложения"""
-    logger.info("🚀 OpenGradient Catalog v4.1-LIVE starting...")
-    logger.info(f"🔑 Hub Email: {'✓' if os.getenv('OPENGRADIENT_HUB_EMAIL') else '✗'}")
+    logger.info("🚀 Starting OpenGradient Catalog v4.1-LIVE")
     start_scheduler()
 
 if __name__ == "__main__":
