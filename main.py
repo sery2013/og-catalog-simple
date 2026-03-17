@@ -60,7 +60,9 @@ BASE_MODELS = [
     ModelInfo(id="og-portfolio-advisor", name="DeFi Portfolio Advisor", description="AI advisor for DeFi portfolio", category="Language", tags=["defi", "portfolio", "advisor"], stats={"likes": 156, "inferences": 4320}),
 ]
 
-# === БАЗА ДАННЫХ (безопасная инициализация) ===
+# === БАЗА ДАННЫХ (исправлено для SQLAlchemy 2.0) ===
+from sqlalchemy import text
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = None
 SessionLocal = None
@@ -92,17 +94,31 @@ try:
         
         Base.metadata.create_all(bind=engine)
         
-        # Тест подключения
+        # ✅ Тест подключения (SQLAlchemy 2.0 syntax)
         db = SessionLocal()
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
         db.close()
         
         db_ok = True
-        logger.info("✅ Database connected")
+        logger.info("✅ Database connected and verified")
+    else:
+        logger.warning("⚠️ No DATABASE_URL env var")
 except Exception as e:
-    logger.warning(f"⚠️ Database unavailable: {e}")
-    logger.info("📦 Running in MEMORY-ONLY mode")
-    db_ok = False
+    logger.warning(f"⚠️ Database connection test failed: {e}")
+    # 🔍 Fallback: проверяем на практике
+    try:
+        if DATABASE_URL and SessionLocal:
+            db = SessionLocal()
+            db.execute(text("SELECT 1"))
+            db.close()
+            db_ok = True
+            logger.info("✅ Database works (fallback check passed)")
+        else:
+            db_ok = False
+            logger.info("📦 Running in MEMORY-ONLY mode")
+    except:
+        db_ok = False
+        logger.info("📦 Running in MEMORY-ONLY mode")
 
 # === ХРАНИЛИЩА ===
 chat_sessions: Dict[str, List] = {}
@@ -134,7 +150,8 @@ def get_all_models():
                     created_at=m.created_at, is_live=False
                 ))
             db.close()
-        except: pass
+        except Exception as e:
+            logger.warning(f"⚠️ DB read error: {e}")
     
     # Из памяти
     for mdata in memory_models.values():
@@ -167,7 +184,8 @@ async def fetch_live_models():
                             "is_live": True
                         })
                 return models
-    except: pass
+    except Exception as e:
+        logger.warning(f"⚠️ Fetch error: {e}")
     return []
 
 async def sync_task():
@@ -175,9 +193,13 @@ async def sync_task():
     logger.info("🔄 Syncing...")
     try:
         sync_status["last_sync"] = datetime.now().isoformat()
-        if not db_ok: return
+        if not db_ok or not SessionLocal: 
+            logger.warning("⚠️ DB not available for sync")
+            return
         
         live = await fetch_live_models()
+        if not live: return
+        
         db = SessionLocal()
         added = 0
         for lm in live:
@@ -213,7 +235,7 @@ async def create_model_task(task_id: str, req: CreateModelRequest):
             "created_at": datetime.now().isoformat(), "is_live": False
         }
         
-        # Сохраняем
+        # Сохраняем в БД или память
         if db_ok and SessionLocal:
             try:
                 db = SessionLocal()
@@ -227,9 +249,9 @@ async def create_model_task(task_id: str, req: CreateModelRequest):
                 db.commit()
                 db.close()
                 logger.info(f"✅ Saved to DB: {model_id}")
-            except:
+            except Exception as e:
+                logger.warning(f"⚠️ DB save failed: {e}, saving to memory")
                 memory_models[model_id] = model_data
-                logger.info(f"💾 Saved to memory: {model_id}")
         else:
             memory_models[model_id] = model_data
             logger.info(f"💾 Saved to memory: {model_id}")
@@ -243,6 +265,7 @@ async def create_model_task(task_id: str, req: CreateModelRequest):
     except Exception as e:
         model_tasks[task_id]["status"] = "failed"
         model_tasks[task_id]["error"] = str(e)
+        logger.error(f"❌ Task error: {e}")
 
 # === CHAT ===
 async def chat_response(query: str, model: Optional[ModelInfo] = None) -> str:
@@ -319,7 +342,6 @@ async def get_task(task_id: str):
 @app.on_event("startup")
 async def startup():
     logger.info("🚀 OpenGradient Catalog starting...")
-    # Запускаем синхронизацию через 5 секунд
     asyncio.create_task(asyncio.sleep(5)).add_done_callback(lambda _: asyncio.create_task(sync_task()))
 
 if __name__ == "__main__":
