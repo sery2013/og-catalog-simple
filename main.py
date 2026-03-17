@@ -60,17 +60,14 @@ BASE_MODELS = [
     ModelInfo(id="og-portfolio-advisor", name="DeFi Portfolio Advisor", description="AI advisor for DeFi portfolio", category="Language", tags=["defi", "portfolio", "advisor"], stats={"likes": 156, "inferences": 4320}),
 ]
 
-# === БАЗА ДАННЫХ (исправлено для SQLAlchemy 2.0) ===
-from sqlalchemy import text
-
+# === БАЗА ДАННЫХ (максимально просто) ===
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = None
 SessionLocal = None
 DBModel = None
-db_ok = False
 
-try:
-    if DATABASE_URL:
+if DATABASE_URL:
+    try:
         from sqlalchemy import create_engine, Column, String, JSON, DateTime, Boolean
         from sqlalchemy.ext.declarative import declarative_base
         from sqlalchemy.orm import sessionmaker
@@ -93,32 +90,9 @@ try:
             synced_at = Column(DateTime, nullable=True)
         
         Base.metadata.create_all(bind=engine)
-        
-        # ✅ Тест подключения (SQLAlchemy 2.0 syntax)
-        db = SessionLocal()
-        db.execute(text("SELECT 1"))
-        db.close()
-        
-        db_ok = True
-        logger.info("✅ Database connected and verified")
-    else:
-        logger.warning("⚠️ No DATABASE_URL env var")
-except Exception as e:
-    logger.warning(f"⚠️ Database connection test failed: {e}")
-    # 🔍 Fallback: проверяем на практике
-    try:
-        if DATABASE_URL and SessionLocal:
-            db = SessionLocal()
-            db.execute(text("SELECT 1"))
-            db.close()
-            db_ok = True
-            logger.info("✅ Database works (fallback check passed)")
-        else:
-            db_ok = False
-            logger.info("📦 Running in MEMORY-ONLY mode")
-    except:
-        db_ok = False
-        logger.info("📦 Running in MEMORY-ONLY mode")
+        logger.info("✅ Database initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ DB init error: {e}")
 
 # === ХРАНИЛИЩА ===
 chat_sessions: Dict[str, List] = {}
@@ -126,13 +100,27 @@ model_tasks: Dict[str, Dict] = {}
 memory_models: Dict[str, dict] = {}
 sync_status = {"last_sync": None, "models_added": 0, "errors": []}
 
+# === ФУНКЦИЯ: проверка БД в реальном времени ===
+def check_db_connection():
+    """Проверяет подключение к БД прямо сейчас"""
+    if not DATABASE_URL or not SessionLocal:
+        return False
+    try:
+        from sqlalchemy import text
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+        return True
+    except:
+        return False
+
 # === ФУНКЦИИ ===
 def get_all_models():
     """Возвращает все модели"""
     result = []
     
     # Из БД
-    if db_ok and SessionLocal:
+    if SessionLocal:
         try:
             db = SessionLocal()
             for m in db.query(DBModel).filter(DBModel.is_live == True).all():
@@ -150,8 +138,7 @@ def get_all_models():
                     created_at=m.created_at, is_live=False
                 ))
             db.close()
-        except Exception as e:
-            logger.warning(f"⚠️ DB read error: {e}")
+        except: pass
     
     # Из памяти
     for mdata in memory_models.values():
@@ -184,8 +171,7 @@ async def fetch_live_models():
                             "is_live": True
                         })
                 return models
-    except Exception as e:
-        logger.warning(f"⚠️ Fetch error: {e}")
+    except: pass
     return []
 
 async def sync_task():
@@ -193,9 +179,7 @@ async def sync_task():
     logger.info("🔄 Syncing...")
     try:
         sync_status["last_sync"] = datetime.now().isoformat()
-        if not db_ok or not SessionLocal: 
-            logger.warning("⚠️ DB not available for sync")
-            return
+        if not SessionLocal: return
         
         live = await fetch_live_models()
         if not live: return
@@ -236,7 +220,7 @@ async def create_model_task(task_id: str, req: CreateModelRequest):
         }
         
         # Сохраняем в БД или память
-        if db_ok and SessionLocal:
+        if SessionLocal:
             try:
                 db = SessionLocal()
                 db.add(DBModel(
@@ -280,11 +264,14 @@ async def root():
 
 @app.get("/health")
 async def health():
+    # 🔥 ПРОВЕРКА БД В РЕАЛЬНОМ ВРЕМЕНИ
+    db_status = "✓" if check_db_connection() else "✗ (memory mode)"
+    
     return {
         "status": "healthy",
         "version": "4.1.0",
         "total_models": len(get_all_models()),
-        "database": "✓" if db_ok else "✗ (memory mode)",
+        "database": db_status,
         "sync_status": sync_status
     }
 
