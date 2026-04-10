@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
 import httpx
 import os
@@ -15,8 +15,16 @@ import uuid
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="OpenGradient Catalog", version="4.1.0", docs_url="/docs")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app = FastAPI(title="OpenGradient Catalog", version="4.2.0")
+
+# Разрешаем CORS для всех доменов
+app.add_middleware(
+    CORSMiddleware, 
+    allow_origins=["*"], 
+    allow_credentials=True, 
+    allow_methods=["*"], 
+    allow_headers=["*"]
+)
 
 # === МОДЕЛИ ДАННЫХ ===
 class ModelInfo(BaseModel):
@@ -30,6 +38,7 @@ class ModelInfo(BaseModel):
     stats: Dict[str, int] = {"likes": 0, "inferences": 0}
     created_at: Optional[str] = None
     is_live: bool = False
+    raw_data: Optional[Dict[str, Any]] = None # Для копирования JSON кода
 
 class ChatRequest(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
@@ -44,25 +53,8 @@ class CreateModelRequest(BaseModel):
     category: str
     base_model: Optional[str] = None
 
-# === 12 БАЗОВЫХ МОДЕЛЕЙ ===
-BASE_MODELS = [
-    ModelInfo(id="og-1hr-volatility-ethusdt", name="ETH/USDT 1hr Volatility", description="Real-time ETH/USDT volatility forecasting model", category="Risk", tags=["defi", "prediction", "ethereum"], stats={"likes": 42, "inferences": 1287}),
-    ModelInfo(id="og-llama3-fintune-v2", name="Llama3 Financial Fine-tuned", description="Fine-tuned Llama 3 8B for financial analysis", category="Language", tags=["llm", "nlp", "finance"], stats={"likes": 156, "inferences": 5432}),
-    ModelInfo(id="og-risk-bert-base", name="Risk Assessment BERT", description="BERT-based model for DeFi risk scoring", category="Risk", tags=["risk", "defi", "security"], stats={"likes": 89, "inferences": 3421}),
-    ModelInfo(id="og-defi-gemma", name="DeFi Gemma Assistant", description="Gemma 7B specialized in DeFi protocols", category="DeFi", tags=["defi", "llm", "yield"], stats={"likes": 203, "inferences": 8765}),
-    ModelInfo(id="og-amm-optimizer", name="AMM Fee Optimizer", description="Optimizes trading fees for AMMs", category="Protocol", tags=["defi", "amm", "trading"], stats={"likes": 67, "inferences": 2100}),
-    ModelInfo(id="og-sybil-detector", name="Sybil Detection Model", description="GNN for detecting sybil attacks", category="Risk", tags=["security", "defi", "gnn"], stats={"likes": 134, "inferences": 4567}),
-    ModelInfo(id="og-sentiment-crypto", name="Crypto Sentiment Analyzer", description="Real-time sentiment analysis for crypto", category="Language", tags=["sentiment", "nlp", "crypto"], stats={"likes": 178, "inferences": 6543}),
-    ModelInfo(id="og-liquidation-predictor", name="Liquidation Predictor", description="Predicts liquidation events in lending", category="Risk", tags=["defi", "lending", "prediction"], stats={"likes": 95, "inferences": 3210}),
-    ModelInfo(id="og-yield-optimizer", name="Yield Farming Optimizer", description="Optimizes yield farming strategies", category="DeFi", tags=["defi", "yield", "farming"], stats={"likes": 221, "inferences": 7890}),
-    ModelInfo(id="og-nft-pricer", name="NFT Price Predictor", description="Predicts NFT floor prices", category="Multimodal", tags=["nft", "prediction", "pricing"], stats={"likes": 112, "inferences": 2890}),
-    ModelInfo(id="og-mev-detector", name="MEV Opportunity Detector", description="Detects MEV opportunities in real-time", category="Protocol", tags=["mev", "trading", "arbitrage"], stats={"likes": 187, "inferences": 5670}),
-    ModelInfo(id="og-portfolio-advisor", name="DeFi Portfolio Advisor", description="AI advisor for DeFi portfolio", category="Language", tags=["defi", "portfolio", "advisor"], stats={"likes": 156, "inferences": 4320}),
-]
-
-# === БАЗА ДАННЫХ (максимально просто) ===
+# === БАЗА ДАННЫХ ===
 DATABASE_URL = os.getenv("DATABASE_URL")
-engine = None
 SessionLocal = None
 DBModel = None
 
@@ -72,7 +64,8 @@ if DATABASE_URL:
         from sqlalchemy.ext.declarative import declarative_base
         from sqlalchemy.orm import sessionmaker
         
-        engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
+        # Настройки для Render Postgres (Internal URL)
+        engine = create_engine(DATABASE_URL, pool_pre_ping=True)
         SessionLocal = sessionmaker(bind=engine)
         Base = declarative_base()
         
@@ -87,209 +80,123 @@ if DATABASE_URL:
             created_at = Column(String, nullable=True)
             is_live = Column(Boolean, default=False)
             is_user_created = Column(Boolean, default=False)
-            synced_at = Column(DateTime, nullable=True)
-        
+            raw_data = Column(JSON, nullable=True) # Поле для хранения полного конфига
+
         Base.metadata.create_all(bind=engine)
-        logger.info("✅ Database initialized")
+        logger.info("✅ Database initialized successfully")
     except Exception as e:
-        logger.warning(f"⚠️ DB init error: {e}")
+        logger.warning(f"⚠️ DB init error: {e}. Switching to memory mode.")
 
-# === ХРАНИЛИЩА ===
-chat_sessions: Dict[str, List] = {}
-model_tasks: Dict[str, Dict] = {}
+# === ХРАНИЛИЩА (ДЛЯ MEMORY MODE) ===
 memory_models: Dict[str, dict] = {}
-sync_status = {"last_sync": None, "models_added": 0, "errors": []}
+sync_status = {"last_sync": None, "models_added": 0}
 
-# === ФУНКЦИЯ: проверка БД в реальном времени ===
-def check_db_connection():
-    """Проверяет подключение к БД прямо сейчас"""
-    if not DATABASE_URL or not SessionLocal:
-        return False
-    try:
-        from sqlalchemy import text
-        db = SessionLocal()
-        db.execute(text("SELECT 1"))
-        db.close()
-        return True
-    except:
-        return False
-
-# === ФУНКЦИИ ===
+# === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
 def get_all_models():
-    """Возвращает все модели"""
     result = []
-    
-    # Из БД
     if SessionLocal:
         try:
             db = SessionLocal()
-            for m in db.query(DBModel).filter(DBModel.is_live == True).all():
+            models = db.query(DBModel).all()
+            for m in models:
+                # Безопасно парсим JSON если он пришел строкой
+                tags = m.tags if isinstance(m.tags, list) else json.loads(m.tags or "[]")
+                stats = m.stats if isinstance(m.stats, dict) else json.loads(m.stats or '{"likes":0,"inferences":0}')
+                raw = m.raw_data if isinstance(m.raw_data, dict) else json.loads(m.raw_data or "{}")
+                
                 result.append(ModelInfo(
                     id=m.id, name=m.name, description=m.description, category=m.category,
-                    tags=m.tags if isinstance(m.tags, list) else [],
-                    stats=m.stats if isinstance(m.stats, dict) else {"likes":0,"inferences":0},
-                    created_at=m.created_at, is_live=True
-                ))
-            for m in db.query(DBModel).filter(DBModel.is_user_created == True).all():
-                result.append(ModelInfo(
-                    id=m.id, name=m.name, description=m.description, category=m.category,
-                    tags=m.tags if isinstance(m.tags, list) else [],
-                    stats=m.stats if isinstance(m.stats, dict) else {"likes":0,"inferences":0},
-                    created_at=m.created_at, is_live=False
+                    tags=tags, stats=stats, created_at=m.created_at, 
+                    is_live=m.is_live, raw_data=raw
                 ))
             db.close()
-        except: pass
+        except Exception as e:
+            logger.error(f"DB Error: {e}")
     
-    # Из памяти
-    for mdata in memory_models.values():
-        result.append(ModelInfo(**mdata))
-    
-    # Базовые
-    result += BASE_MODELS
+    # Добавляем модели из памяти (если БД упала или для новых сессий)
+    for mid in memory_models:
+        if not any(r.id == mid for r in result):
+            result.append(ModelInfo(**memory_models[mid]))
+            
     return result
 
 async def fetch_live_models():
-    """Получает live модели"""
+    """Спарсить модели с защитой от 403 ошибки"""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get("https://hub.opengradient.ai/api/models")
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            resp = await client.get("https://hub.opengradient.ai/api/models", headers=headers)
             if resp.status_code == 200:
                 data = resp.json()
                 items = data if isinstance(data, list) else data.get('data', [])
-                models = []
-                for item in items[:5]:
-                    repo = item.get('model_repository', item.get('repository', item))
-                    if isinstance(repo, dict) and repo.get('description'):
-                        models.append({
-                            "id": repo.get('name', f"og-{len(models)}"),
-                            "name": repo.get('name', 'Unknown'),
-                            "description": repo.get('description', ''),
-                            "category": repo.get('category', 'Uncategorized'),
-                            "tags": repo.get('tags', []),
-                            "stats": {"likes": 0, "inferences": 0},
-                            "created_at": datetime.now().isoformat(),
-                            "is_live": True
-                        })
-                return models
-    except: pass
+                return items[:15] # Берем первые 15 для каталога
+    except Exception as e:
+        logger.error(f"Scraper error: {e}")
     return []
 
 async def sync_task():
-    """Синхронизация"""
-    logger.info("🔄 Syncing...")
+    """Фоновая синхронизация"""
+    logger.info("🔄 Syncing with OpenGradient Hub...")
+    live_data = await fetch_live_models()
+    if not live_data or not SessionLocal: return
+
+    db = SessionLocal()
+    added = 0
     try:
-        sync_status["last_sync"] = datetime.now().isoformat()
-        if not SessionLocal: return
-        
-        live = await fetch_live_models()
-        if not live: return
-        
-        db = SessionLocal()
-        added = 0
-        for lm in live:
-            if not db.query(DBModel).filter(DBModel.id == lm["id"]).first():
-                db.add(DBModel(
-                    id=lm["id"], name=lm["name"], description=lm["description"],
-                    category=lm["category"], tags=json.dumps(lm["tags"]),
-                    stats=json.dumps(lm["stats"]), created_at=lm.get("created_at"),
-                    is_live=True, is_user_created=False, synced_at=datetime.now()
-                ))
+        for item in live_data:
+            # Пытаемся вытащить имя и описание из разных структур API
+            repo = item.get('model_repository', item)
+            m_id = repo.get('name', str(uuid.uuid4())[:8])
+            
+            if not db.query(DBModel).filter(DBModel.id == m_id).first():
+                new_m = DBModel(
+                    id=m_id,
+                    name=repo.get('name', 'AI Model'),
+                    description=repo.get('description', 'No description available'),
+                    category=repo.get('category', 'General'),
+                    tags=repo.get('tags', []),
+                    stats={"likes": 0, "inferences": 0},
+                    created_at=datetime.now().isoformat(),
+                    is_live=True,
+                    raw_data=item # Сохраняем весь объект для копирования кода
+                )
+                db.add(new_m)
                 added += 1
-                if added >= 5: break
         db.commit()
-        db.close()
+        sync_status["last_sync"] = datetime.now().isoformat()
         sync_status["models_added"] = added
-        logger.info(f"✅ Synced +{added}")
+        logger.info(f"✅ Sync complete. Added {added} models.")
     except Exception as e:
-        logger.error(f"❌ Sync error: {e}")
-
-# === СОЗДАНИЕ МОДЕЛИ ===
-async def create_model_task(task_id: str, req: CreateModelRequest):
-    try:
-        model_tasks[task_id]["status"] = "processing"
-        for p in [25, 50, 75, 100]:
-            model_tasks[task_id]["progress"] = p
-            await asyncio.sleep(0.3)
-        
-        model_id = f"og-{req.name.lower().replace(' ', '-')}-{uuid.uuid4().hex[:6]}"
-        model_data = {
-            "id": model_id, "name": req.name, "description": req.description,
-            "category": req.category, "tags": ["custom", "user-created"],
-            "stats": {"likes": 0, "inferences": 0},
-            "created_at": datetime.now().isoformat(), "is_live": False
-        }
-        
-        # Сохраняем в БД или память
-        if SessionLocal:
-            try:
-                db = SessionLocal()
-                db.add(DBModel(
-                    id=model_id, name=req.name, description=req.description,
-                    category=req.category, tags=json.dumps(model_data["tags"]),
-                    stats=json.dumps(model_data["stats"]),
-                    created_at=model_data["created_at"],
-                    is_live=False, is_user_created=True, synced_at=datetime.now()
-                ))
-                db.commit()
-                db.close()
-                logger.info(f"✅ Saved to DB: {model_id}")
-            except Exception as e:
-                logger.warning(f"⚠️ DB save failed: {e}, saving to memory")
-                memory_models[model_id] = model_data
-        else:
-            memory_models[model_id] = model_data
-            logger.info(f"💾 Saved to memory: {model_id}")
-        
-        model_tasks[task_id]["status"] = "completed"
-        model_tasks[task_id]["result"] = {
-            "model_id": model_id,
-            "message": "Created",
-            "tx_hash": "0x" + os.urandom(32).hex()
-        }
-    except Exception as e:
-        model_tasks[task_id]["status"] = "failed"
-        model_tasks[task_id]["error"] = str(e)
-        logger.error(f"❌ Task error: {e}")
-
-# === CHAT ===
-async def chat_response(query: str, model: Optional[ModelInfo] = None) -> str:
-    if model:
-        return f"**{model.name}** ({model.category})\n\n{model.description}\n\nTags: {', '.join(model.tags)}\n\nStats: {model.stats.get('likes', 0)} likes, {model.stats.get('inferences', 0)} inferences"
-    return "👋 Select a model to chat!"
+        logger.error(f"Sync commit error: {e}")
+    finally:
+        db.close()
 
 # === ROUTES ===
 @app.get("/")
 async def root():
-    return FileResponse("static/index.html")
-
-@app.get("/health")
-async def health():
-    # 🔥 ПРОВЕРКА БД В РЕАЛЬНОМ ВРЕМЕНИ
-    db_status = "✓" if check_db_connection() else "✗ (memory mode)"
-    
-    return {
-        "status": "healthy",
-        "version": "4.1.0",
-        "total_models": len(get_all_models()),
-        "database": db_status,
-        "sync_status": sync_status
-    }
+    # Отдаем index.html из корня или static
+    for path in ["static/index.html", "index.html"]:
+        if os.path.exists(path): return FileResponse(path)
+    return {"error": "index.html not found"}
 
 @app.get("/api/models")
-async def list_models(category: Optional[str] = None, search: Optional[str] = None, live_only: bool = False):
+async def list_models(category: Optional[str] = None, search: Optional[str] = None):
     models = get_all_models()
-    if live_only: models = [m for m in models if m.is_live]
-    if category and category != 'all': models = [m for m in models if m.category.lower() == category.lower()]
+    if category and category != 'all':
+        models = [m for m in models if m.category.lower() == category.lower()]
     if search:
         s = search.lower()
         models = [m for m in models if s in m.name.lower() or s in m.description.lower()]
-    return [m.model_dump() for m in models[:100]]
+    return models
 
 @app.get("/api/models/{model_id}")
 async def get_model(model_id: str):
-    for m in get_all_models():
-        if m.id == model_id: return m.model_dump()
-    raise HTTPException(404, "Not found")
+    models = get_all_models()
+    model = next((m for m in models if m.id == model_id), None)
+    if not model: raise HTTPException(404, "Model not found")
+    return model
 
 @app.get("/api/stats")
 async def get_stats():
@@ -299,38 +206,40 @@ async def get_stats():
         "live_models": len([m for m in models if m.is_live]),
         "total_likes": sum(m.stats.get('likes', 0) for m in models),
         "total_inferences": sum(m.stats.get('inferences', 0) for m in models),
-        "last_sync": sync_status.get("last_sync"),
-        "sync_added": sync_status.get("models_added", 0)
+        "last_sync": sync_status["last_sync"]
     }
 
-@app.post("/api/chat")
-async def chat(req: ChatRequest):
-    sid = req.session_id or f"s_{datetime.now().timestamp()}"
-    model = next((m for m in get_all_models() if m.id == req.model_id), None) if req.model_id else None
-    reply = await chat_response(req.query, model)
-    if sid not in chat_sessions: chat_sessions[sid] = []
-    chat_sessions[sid].append({"role": "user", "content": req.query})
-    chat_sessions[sid].append({"role": "assistant", "content": reply})
-    return {"reply": reply, "session_id": sid}
-
 @app.post("/api/models/create")
-async def create_model(req: CreateModelRequest, bg: BackgroundTasks):
-    tid = f"t_{datetime.now().timestamp()}"
-    model_tasks[tid] = {"status": "queued", "progress": 0}
-    bg.add_task(create_model_task, tid, req)
-    return {"task_id": tid, "status": "queued"}
-
-@app.get("/api/tasks/{task_id}")
-async def get_task(task_id: str):
-    t = model_tasks.get(task_id)
-    if not t: raise HTTPException(404, "Not found")
-    return t
+async def create_model(req: CreateModelRequest):
+    m_id = f"custom-{uuid.uuid4().hex[:6]}"
+    new_model = {
+        "id": m_id, "name": req.name, "description": req.description,
+        "category": req.category, "tags": ["user-created"],
+        "stats": {"likes": 0, "inferences": 0}, "is_live": False,
+        "raw_data": {"info": "User created model", "base": req.base_model}
+    }
+    
+    if SessionLocal:
+        db = SessionLocal()
+        db.add(DBModel(
+            id=m_id, name=req.name, description=req.description,
+            category=req.category, tags=new_model["tags"], stats=new_model["stats"],
+            is_live=False, is_user_created=True, raw_data=new_model["raw_data"]
+        ))
+        db.commit()
+        db.close()
+    else:
+        memory_models[m_id] = new_model
+        
+    return {"status": "completed", "result": {"model_id": m_id}}
 
 @app.on_event("startup")
 async def startup():
-    logger.info("🚀 OpenGradient Catalog starting...")
+    # Запуск синхронизации через 5 секунд после старта
     asyncio.create_task(asyncio.sleep(5)).add_done_callback(lambda _: asyncio.create_task(sync_task()))
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000)
+    # ПОРТ ДЛЯ RENDER (читаем из среды)
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
