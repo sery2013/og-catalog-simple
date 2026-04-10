@@ -8,7 +8,7 @@ from datetime import datetime
 import httpx
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse # Добавлено
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import Column, String, Integer, Boolean, Text, JSON, DateTime, create_engine
 from sqlalchemy.ext.declarative import declarative_base
@@ -64,10 +64,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- НОВОЕ: Обработка главной страницы ---
 @app.get("/")
 async def read_index():
-    # Отдает ваш index.html пользователю
     return FileResponse('index.html')
 
 class CreateModelRequest(BaseModel):
@@ -111,7 +109,7 @@ async def scrape_opengradient_hub():
                             ))
                             added_count += 1
                 
-                db.add(SyncLog(models_added=added_count)) # Логируем успех
+                db.add(SyncLog(models_added=added_count))
                 db.commit()
                 logger.info(f"✅ Sync complete. Added {added_count} models.")
             else:
@@ -133,7 +131,6 @@ async def scrape_opengradient_hub():
                         ))
                         added_count += 1
                 
-                # Добавляем запись в лог синхронизации, чтобы на сайте не было пусто в статусе
                 db.add(SyncLog(models_added=added_count))
                 db.commit()
                 logger.info(f"💾 Added {added_count} seed models to PostgreSQL.")
@@ -188,7 +185,6 @@ def get_stats():
     last_log = db.query(SyncLog).order_by(SyncLog.id.desc()).first()
     db.close()
     
-    # НОВОЕ: Если логов нет, создаем фиктивный объект для фронтенда
     sync_date = last_log.last_sync if last_log else datetime.utcnow()
     sync_count = last_log.models_added if last_log else 0
 
@@ -201,10 +197,16 @@ def get_stats():
         "sync_added": sync_count
     }
 
+# --- ИСПРАВЛЕННЫЙ БЛОК ЗАПУСКА ---
+
 @app.on_event("startup")
 async def startup_event():
+    # Запускаем фоновую задачу аккуратно
     asyncio.create_task(scrape_opengradient_hub())
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Render передает порт через переменную окружения PORT
+    port = int(os.environ.get("PORT", 8000))
+    # Запуск на хосте 0.0.0.0 обязателен для Docker/Render
+    uvicorn.run(app, host="0.0.0.0", port=port)
