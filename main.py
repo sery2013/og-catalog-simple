@@ -1,146 +1,336 @@
-import os
-import asyncio
-import logging
-import uuid
-import random
-from datetime import datetime
-from typing import List, Optional
-
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-from sqlalchemy import Column, String, Boolean, Text, JSON, DateTime, create_engine, desc
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from pydantic import BaseModel, ConfigDict
+from typing import Optional, List, Dict, Any
+from datetime import datetime, timedelta
+import logging
+import httpx
+import os
+import json
+import asyncio
+import uuid
 
-# Настройка логирования
-logging.basicConfig(level=logging.INFO)
+# === ЛОГИРОВАНИЕ ===
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Настройка базы данных
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db").replace("postgres://", "postgresql://", 1)
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+app = FastAPI(title="OpenGradient Catalog", version="4.1.0", docs_url="/docs")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-# Модель таблицы
-class ModelDB(Base):
-    __tablename__ = "models"
-    id = Column(String, primary_key=True, index=True)
-    name = Column(String)
-    description = Column(Text)
-    category = Column(String)
-    type = Column(String, default="BASE") 
-    is_live = Column(Boolean, default=True)
-    stats = Column(JSON)
-    raw_data = Column(JSON)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-# --- УПРАВЛЕНИЕ СТРУКТУРОЙ ---
-# Раскомментируй drop_all для полной очистки базы при деплое
-Base.metadata.drop_all(bind=engine) 
-Base.metadata.create_all(bind=engine)
-# -----------------------------
-
-app = FastAPI()
-
-# Подключение статики
-static_path = os.path.join(os.getcwd(), 'static')
-if os.path.exists(static_path):
-    app.mount("/static", StaticFiles(directory=static_path), name="static")
-
-# Схемы данных
-class ChatRequest(BaseModel):
-    model_id: str
-    message: str
-
-class CreateModelRequest(BaseModel):
+# === МОДЕЛИ ДАННЫХ ===
+class ModelInfo(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    id: str
     name: str
     description: str
-    base_model: str # Выбор базового движка
+    category: str
+    tags: List[str] = []
+    author: str = "OpenGradient"
+    stats: Dict[str, int] = {"likes": 0, "inferences": 0}
+    created_at: Optional[str] = None
+    is_live: bool = False
 
-# Эндпоинты
+class ChatRequest(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    query: str
+    model_id: Optional[str] = None
+    session_id: Optional[str] = None
+
+class CreateModelRequest(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    name: str
+    description: str
+    category: str
+    base_model: Optional[str] = None
+
+# === 12 БАЗОВЫХ МОДЕЛЕЙ ===
+BASE_MODELS = [
+    ModelInfo(id="og-1hr-volatility-ethusdt", name="ETH/USDT 1hr Volatility", description="Real-time ETH/USDT volatility forecasting model", category="Risk", tags=["defi", "prediction", "ethereum"], stats={"likes": 42, "inferences": 1287}),
+    ModelInfo(id="og-llama3-fintune-v2", name="Llama3 Financial Fine-tuned", description="Fine-tuned Llama 3 8B for financial analysis", category="Language", tags=["llm", "nlp", "finance"], stats={"likes": 156, "inferences": 5432}),
+    ModelInfo(id="og-risk-bert-base", name="Risk Assessment BERT", description="BERT-based model for DeFi risk scoring", category="Risk", tags=["risk", "defi", "security"], stats={"likes": 89, "inferences": 3421}),
+    ModelInfo(id="og-defi-gemma", name="DeFi Gemma Assistant", description="Gemma 7B specialized in DeFi protocols", category="DeFi", tags=["defi", "llm", "yield"], stats={"likes": 203, "inferences": 8765}),
+    ModelInfo(id="og-amm-optimizer", name="AMM Fee Optimizer", description="Optimizes trading fees for AMMs", category="Protocol", tags=["defi", "amm", "trading"], stats={"likes": 67, "inferences": 2100}),
+    ModelInfo(id="og-sybil-detector", name="Sybil Detection Model", description="GNN for detecting sybil attacks", category="Risk", tags=["security", "defi", "gnn"], stats={"likes": 134, "inferences": 4567}),
+    ModelInfo(id="og-sentiment-crypto", name="Crypto Sentiment Analyzer", description="Real-time sentiment analysis for crypto", category="Language", tags=["sentiment", "nlp", "crypto"], stats={"likes": 178, "inferences": 6543}),
+    ModelInfo(id="og-liquidation-predictor", name="Liquidation Predictor", description="Predicts liquidation events in lending", category="Risk", tags=["defi", "lending", "prediction"], stats={"likes": 95, "inferences": 3210}),
+    ModelInfo(id="og-yield-optimizer", name="Yield Farming Optimizer", description="Optimizes yield farming strategies", category="DeFi", tags=["defi", "yield", "farming"], stats={"likes": 221, "inferences": 7890}),
+    ModelInfo(id="og-nft-pricer", name="NFT Price Predictor", description="Predicts NFT floor prices", category="Multimodal", tags=["nft", "prediction", "pricing"], stats={"likes": 112, "inferences": 2890}),
+    ModelInfo(id="og-mev-detector", name="MEV Opportunity Detector", description="Detects MEV opportunities in real-time", category="Protocol", tags=["mev", "trading", "arbitrage"], stats={"likes": 187, "inferences": 5670}),
+    ModelInfo(id="og-portfolio-advisor", name="DeFi Portfolio Advisor", description="AI advisor for DeFi portfolio", category="Language", tags=["defi", "portfolio", "advisor"], stats={"likes": 156, "inferences": 4320}),
+]
+
+# === БАЗА ДАННЫХ (максимально просто) ===
+DATABASE_URL = os.getenv("DATABASE_URL")
+engine = None
+SessionLocal = None
+DBModel = None
+
+if DATABASE_URL:
+    try:
+        from sqlalchemy import create_engine, Column, String, JSON, DateTime, Boolean
+        from sqlalchemy.ext.declarative import declarative_base
+        from sqlalchemy.orm import sessionmaker
+        
+        engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
+        SessionLocal = sessionmaker(bind=engine)
+        Base = declarative_base()
+        
+        class DBModel(Base):
+            __tablename__ = "models"
+            id = Column(String, primary_key=True, index=True)
+            name = Column(String, nullable=False)
+            description = Column(String, nullable=False)
+            category = Column(String, nullable=False)
+            tags = Column(JSON, nullable=True)
+            stats = Column(JSON, nullable=True)
+            created_at = Column(String, nullable=True)
+            is_live = Column(Boolean, default=False)
+            is_user_created = Column(Boolean, default=False)
+            synced_at = Column(DateTime, nullable=True)
+        
+        Base.metadata.create_all(bind=engine)
+        logger.info("✅ Database initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ DB init error: {e}")
+
+# === ХРАНИЛИЩА ===
+chat_sessions: Dict[str, List] = {}
+model_tasks: Dict[str, Dict] = {}
+memory_models: Dict[str, dict] = {}
+sync_status = {"last_sync": None, "models_added": 0, "errors": []}
+
+# === ФУНКЦИЯ: проверка БД в реальном времени ===
+def check_db_connection():
+    """Проверяет подключение к БД прямо сейчас"""
+    if not DATABASE_URL or not SessionLocal:
+        return False
+    try:
+        from sqlalchemy import text
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+        return True
+    except:
+        return False
+
+# === ФУНКЦИИ ===
+def get_all_models():
+    """Возвращает все модели"""
+    result = []
+    
+    # Из БД
+    if SessionLocal:
+        try:
+            db = SessionLocal()
+            for m in db.query(DBModel).filter(DBModel.is_live == True).all():
+                result.append(ModelInfo(
+                    id=m.id, name=m.name, description=m.description, category=m.category,
+                    tags=m.tags if isinstance(m.tags, list) else [],
+                    stats=m.stats if isinstance(m.stats, dict) else {"likes":0,"inferences":0},
+                    created_at=m.created_at, is_live=True
+                ))
+            for m in db.query(DBModel).filter(DBModel.is_user_created == True).all():
+                result.append(ModelInfo(
+                    id=m.id, name=m.name, description=m.description, category=m.category,
+                    tags=m.tags if isinstance(m.tags, list) else [],
+                    stats=m.stats if isinstance(m.stats, dict) else {"likes":0,"inferences":0},
+                    created_at=m.created_at, is_live=False
+                ))
+            db.close()
+        except: pass
+    
+    # Из памяти
+    for mdata in memory_models.values():
+        result.append(ModelInfo(**mdata))
+    
+    # Базовые
+    result += BASE_MODELS
+    return result
+
+async def fetch_live_models():
+    """Получает live модели"""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get("https://hub.opengradient.ai/api/models")
+            if resp.status_code == 200:
+                data = resp.json()
+                items = data if isinstance(data, list) else data.get('data', [])
+                models = []
+                for item in items[:5]:
+                    repo = item.get('model_repository', item.get('repository', item))
+                    if isinstance(repo, dict) and repo.get('description'):
+                        models.append({
+                            "id": repo.get('name', f"og-{len(models)}"),
+                            "name": repo.get('name', 'Unknown'),
+                            "description": repo.get('description', ''),
+                            "category": repo.get('category', 'Uncategorized'),
+                            "tags": repo.get('tags', []),
+                            "stats": {"likes": 0, "inferences": 0},
+                            "created_at": datetime.now().isoformat(),
+                            "is_live": True
+                        })
+                return models
+    except: pass
+    return []
+
+async def sync_task():
+    """Синхронизация"""
+    logger.info("🔄 Syncing...")
+    try:
+        sync_status["last_sync"] = datetime.now().isoformat()
+        if not SessionLocal: return
+        
+        live = await fetch_live_models()
+        if not live: return
+        
+        db = SessionLocal()
+        added = 0
+        for lm in live:
+            if not db.query(DBModel).filter(DBModel.id == lm["id"]).first():
+                db.add(DBModel(
+                    id=lm["id"], name=lm["name"], description=lm["description"],
+                    category=lm["category"], tags=json.dumps(lm["tags"]),
+                    stats=json.dumps(lm["stats"]), created_at=lm.get("created_at"),
+                    is_live=True, is_user_created=False, synced_at=datetime.now()
+                ))
+                added += 1
+                if added >= 5: break
+        db.commit()
+        db.close()
+        sync_status["models_added"] = added
+        logger.info(f"✅ Synced +{added}")
+    except Exception as e:
+        logger.error(f"❌ Sync error: {e}")
+
+# === СОЗДАНИЕ МОДЕЛИ ===
+async def create_model_task(task_id: str, req: CreateModelRequest):
+    try:
+        model_tasks[task_id]["status"] = "processing"
+        for p in [25, 50, 75, 100]:
+            model_tasks[task_id]["progress"] = p
+            await asyncio.sleep(0.3)
+        
+        model_id = f"og-{req.name.lower().replace(' ', '-')}-{uuid.uuid4().hex[:6]}"
+        model_data = {
+            "id": model_id, "name": req.name, "description": req.description,
+            "category": req.category, "tags": ["custom", "user-created"],
+            "stats": {"likes": 0, "inferences": 0},
+            "created_at": datetime.now().isoformat(), "is_live": False
+        }
+        
+        # Сохраняем в БД или память
+        if SessionLocal:
+            try:
+                db = SessionLocal()
+                db.add(DBModel(
+                    id=model_id, name=req.name, description=req.description,
+                    category=req.category, tags=json.dumps(model_data["tags"]),
+                    stats=json.dumps(model_data["stats"]),
+                    created_at=model_data["created_at"],
+                    is_live=False, is_user_created=True, synced_at=datetime.now()
+                ))
+                db.commit()
+                db.close()
+                logger.info(f"✅ Saved to DB: {model_id}")
+            except Exception as e:
+                logger.warning(f"⚠️ DB save failed: {e}, saving to memory")
+                memory_models[model_id] = model_data
+        else:
+            memory_models[model_id] = model_data
+            logger.info(f"💾 Saved to memory: {model_id}")
+        
+        model_tasks[task_id]["status"] = "completed"
+        model_tasks[task_id]["result"] = {
+            "model_id": model_id,
+            "message": "Created",
+            "tx_hash": "0x" + os.urandom(32).hex()
+        }
+    except Exception as e:
+        model_tasks[task_id]["status"] = "failed"
+        model_tasks[task_id]["error"] = str(e)
+        logger.error(f"❌ Task error: {e}")
+
+# === CHAT ===
+async def chat_response(query: str, model: Optional[ModelInfo] = None) -> str:
+    if model:
+        return f"**{model.name}** ({model.category})\n\n{model.description}\n\nTags: {', '.join(model.tags)}\n\nStats: {model.stats.get('likes', 0)} likes, {model.stats.get('inferences', 0)} inferences"
+    return "👋 Select a model to chat!"
+
+# === ROUTES ===
 @app.get("/")
-async def read_index():
-    return FileResponse(os.path.join(static_path, 'index.html'))
+async def root():
+    return FileResponse("static/index.html")
+
+@app.get("/health")
+async def health():
+    # 🔥 ПРОВЕРКА БД В РЕАЛЬНОМ ВРЕМЕНИ
+    db_status = "✓" if check_db_connection() else "✗ (memory mode)"
+    
+    return {
+        "status": "healthy",
+        "version": "4.1.0",
+        "total_models": len(get_all_models()),
+        "database": db_status,
+        "sync_status": sync_status
+    }
 
 @app.get("/api/models")
-def get_models():
-    db = SessionLocal()
-    try:
-        # Сортировка: новые сверху
-        return db.query(ModelDB).order_by(desc(ModelDB.created_at)).all()
-    finally:
-        db.close()
+async def list_models(category: Optional[str] = None, search: Optional[str] = None, live_only: bool = False):
+    models = get_all_models()
+    if live_only: models = [m for m in models if m.is_live]
+    if category and category != 'all': models = [m for m in models if m.category.lower() == category.lower()]
+    if search:
+        s = search.lower()
+        models = [m for m in models if s in m.name.lower() or s in m.description.lower()]
+    return [m.model_dump() for m in models[:100]]
+
+@app.get("/api/models/{model_id}")
+async def get_model(model_id: str):
+    for m in get_all_models():
+        if m.id == model_id: return m.model_dump()
+    raise HTTPException(404, "Not found")
+
+@app.get("/api/stats")
+async def get_stats():
+    models = get_all_models()
+    return {
+        "total_models": len(models),
+        "live_models": len([m for m in models if m.is_live]),
+        "total_likes": sum(m.stats.get('likes', 0) for m in models),
+        "total_inferences": sum(m.stats.get('inferences', 0) for m in models),
+        "last_sync": sync_status.get("last_sync"),
+        "sync_added": sync_status.get("models_added", 0)
+    }
 
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
-    tech_responses = [
-        f"Inference successful on TEE node #0x{uuid.uuid4().hex[:4]}. Latency: {random.randint(20, 95)}ms.",
-        f"Verified via OpenGradient SDK. Integrity score: 0.999. Hash: 0x{uuid.uuid4().hex[:10]}",
-        f"Model {req.model_id} optimized. Resource usage: {random.uniform(0.1, 0.3):.3f} tokens.",
-        f"Consensus reached. Secure enclave status: ACTIVE."
-    ]
-    return {"reply": random.choice(tech_responses)}
+    sid = req.session_id or f"s_{datetime.now().timestamp()}"
+    model = next((m for m in get_all_models() if m.id == req.model_id), None) if req.model_id else None
+    reply = await chat_response(req.query, model)
+    if sid not in chat_sessions: chat_sessions[sid] = []
+    chat_sessions[sid].append({"role": "user", "content": req.query})
+    chat_sessions[sid].append({"role": "assistant", "content": reply})
+    return {"reply": reply, "session_id": sid}
 
 @app.post("/api/models/create")
-def create_model(req: CreateModelRequest):
-    db = SessionLocal()
-    try:
-        # ID теперь включает имя базовой модели
-        new_id = f"{req.base_model.lower()}-{uuid.uuid4().hex[:4]}"
-        new_model = ModelDB(
-            id=new_id,
-            name=req.name,
-            description=req.description,
-            category="AI Model",
-            type="USER", 
-            is_live=True,
-            stats={"likes": 0, "inferences": 0},
-            raw_data={
-                "base_engine": req.base_model,
-                "status": "deployed",
-                "sdk_version": "0.4.2",
-                "deployment_hash": uuid.uuid4().hex
-            },
-            created_at=datetime.utcnow() 
-        )
-        db.add(new_model)
-        db.commit()
-        return {"status": "success", "id": new_id}
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
+async def create_model(req: CreateModelRequest, bg: BackgroundTasks):
+    tid = f"t_{datetime.now().timestamp()}"
+    model_tasks[tid] = {"status": "queued", "progress": 0}
+    bg.add_task(create_model_task, tid, req)
+    return {"task_id": tid, "status": "queued"}
 
-async def init_db():
-    db = SessionLocal()
-    try:
-        if db.query(ModelDB).count() == 0:
-            seeds = [
-                {"id": "llama-3-8b", "name": "Llama 3 8B Gradient", "desc": "Meta's latest model optimized by Gradient.", "type": "BASE"},
-                {"id": "mistral-7b", "name": "Mistral 7B v0.3", "desc": "High-performance compact NLP model.", "type": "LIVE"},
-                {"id": "phi-3-mini", "name": "Phi-3 Mini 4K", "desc": "Microsoft lightweight small language model.", "type": "BASE"}
-            ]
-            for s in seeds:
-                db.add(ModelDB(
-                    id=s["id"], name=s["name"], description=s["desc"],
-                    category="General", type=s["type"],
-                    stats={"likes": random.randint(100, 500), "inferences": random.randint(1000, 9000)},
-                    raw_data={"provider": "OpenGradient", "tier": "Verified"},
-                    created_at=datetime.utcnow()
-                ))
-            db.commit()
-    finally:
-        db.close()
+@app.get("/api/tasks/{task_id}")
+async def get_task(task_id: str):
+    t = model_tasks.get(task_id)
+    if not t: raise HTTPException(404, "Not found")
+    return t
 
 @app.on_event("startup")
-async def startup_event():
-    await init_db()
+async def startup():
+    logger.info("🚀 OpenGradient Catalog starting...")
+    asyncio.create_task(asyncio.sleep(5)).add_done_callback(lambda _: asyncio.create_task(sync_task()))
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000)
