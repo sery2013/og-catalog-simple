@@ -2,95 +2,140 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>🔷 OpenGradient Catalog</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenGradient Catalog</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
   <style>
-    :root { --primary: #06B6D4; --bg: #0F172A; --card: rgba(15, 23, 42, 0.7); --border: rgba(34, 211, 238, 0.3); }
-    body { font-family: sans-serif; background: var(--bg); color: #fff; margin: 0; padding: 20px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-    .card { background: var(--card); border: 1px solid var(--border); padding: 20px; border-radius: 12px; }
-    .btn { padding: 10px; border-radius: 8px; cursor: pointer; border: none; width: 100%; margin-top: 10px; font-weight: bold; }
-    .btn-chat { background: var(--primary); color: white; }
-    .btn-view { background: rgba(255,255,255,0.1); color: white; }
-    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); align-items: center; justify-content: center; z-index: 1000; }
+    :root { --primary: #14b8a6; --bg-dark: #0f172a; --card-bg: #1e293b; --text: #f8fafc; --border: #334155; }
+    * { box-sizing: border-box; font-family: 'Inter', sans-serif; }
+    body { background: var(--bg-dark); color: var(--text); margin: 0; padding: 20px; }
+    .header { text-align: left; margin-bottom: 30px; display: flex; align-items: center; gap: 15px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 25px; }
+    
+    /* Карточка модели */
+    .card { background: rgba(30, 41, 59, 0.5); border: 1px solid var(--border); border-radius: 12px; padding: 24px; transition: 0.3s; }
+    .card:hover { border-color: var(--primary); transform: translateY(-2px); }
+    .card h3 { margin: 0 0 10px 0; font-size: 1.2rem; }
+    .card p { color: #94a3b8; font-size: 0.9rem; line-height: 1.5; margin-bottom: 20px; }
+    .btn-details { background: var(--primary); color: white; border: none; padding: 12px; border-radius: 8px; width: 100%; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+
+    /* Модальное окно (как на скрине 5) */
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center; }
     .modal.active { display: flex; }
-    .modal-content { background: #1e293b; padding: 30px; border-radius: 12px; width: 90%; max-width: 900px; }
-    .chat-area { height: 300px; overflow-y: auto; background: #000; padding: 15px; border-radius: 8px; margin-bottom: 10px; }
-    pre { background: #000; color: #0f0; padding: 10px; border-radius: 8px; font-size: 11px; max-height: 200px; overflow: auto; }
+    .modal-content { background: #0f172a; border: 1px solid var(--border); border-radius: 16px; width: 95%; max-width: 1100px; padding: 30px; display: grid; grid-template-columns: 1.5fr 1fr; gap: 25px; position: relative; }
+    .close-x { position: absolute; top: 15px; left: 15px; background: white; color: black; border: none; border-radius: 4px; padding: 2px 6px; cursor: pointer; font-weight: bold; }
+
+    /* Чат зона */
+    .chat-container { display: flex; flex-direction: column; gap: 15px; }
+    .messages-wall { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 12px; height: 400px; overflow-y: auto; padding: 20px; }
+    .input-row { display: flex; gap: 10px; background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border); border-radius: 12px; padding: 5px 10px; }
+    .input-row input { flex: 1; background: transparent; border: none; color: white; padding: 15px; outline: none; }
+    .btn-send { background: var(--primary); color: white; border: none; padding: 0 30px; border-radius: 10px; font-weight: 800; cursor: pointer; text-transform: uppercase; }
+
+    /* Инфо зона */
+    .info-panel { background: rgba(30, 41, 59, 0.3); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+    .info-panel h4 { margin-top: 0; color: #94a3b8; font-size: 0.8rem; text-transform: uppercase; }
+    .info-panel span { color: white; font-weight: 600; font-size: 1rem; }
+    pre { background: #000; color: #4ade80; padding: 15px; border-radius: 10px; font-size: 0.8rem; overflow: auto; max-height: 250px; border: 1px solid #1e293b; }
+    .btn-copy { background: rgba(20, 184, 166, 0.1); color: var(--primary); border: 1px solid var(--primary); padding: 10px; border-radius: 8px; width: 100%; cursor: pointer; font-size: 0.9rem; margin-top: 10px; }
+
+    .msg { margin-bottom: 15px; padding: 12px; border-radius: 8px; font-size: 0.95rem; border: 1px solid var(--border); background: rgba(255,255,255,0.03); }
   </style>
 </head>
 <body>
-  <h1>🔷 OpenGradient Catalog</h1>
-  <div class="grid" id="grid"></div>
+  <div class="header">
+    <div style="width: 30px; height: 30px; background: var(--primary); transform: rotate(45deg);"></div>
+    <h1 style="margin:0; font-weight: 800;">OpenGradient Catalog</h1>
+  </div>
 
-  <div class="modal" id="modal">
+  <div class="grid" id="modelGrid"></div>
+
+  <div class="modal" id="detailsModal">
     <div class="modal-content">
-      <h2 id="mTitle">Details</h2>
-      <div style="display: flex; gap: 20px;">
-        <div style="flex: 1;">
-          <div class="chat-area" id="chatMsgs"></div>
-          <input type="text" id="chatInput" style="width:70%; padding:10px;" placeholder="Message...">
-          <button onclick="send()" style="width:25%; padding:10px;">Send</button>
+      <button class="close-x" onclick="closeModal()">×</button>
+      
+      <div class="chat-container">
+        <h2 id="modalTitle" style="margin:0;">Model Name</h2>
+        <div class="messages-wall" id="chatWall">
+          <div class="msg">Hello! I am an AI assistant for this model. How can I help you?</div>
         </div>
-        <div style="flex: 1;">
-          <strong>Technical Config</strong>
-          <pre id="json"></pre>
-          <button class="btn btn-chat" onclick="openFork()">🛠 Fork / Deploy</button>
-          <button class="btn btn-view" onclick="closeM()">Close</button>
+        <div class="input-row">
+          <input type="text" id="userInput" placeholder="hi">
+          <button class="btn-send" onclick="handleSend()">Send</button>
         </div>
+      </div>
+
+      <div class="info-panel">
+        <p><strong>ID:</strong> <span id="infoId">-</span></p>
+        <p><strong>Category:</strong> <span id="infoCat">-</span></p>
+        <p id="infoDesc" style="color:#94a3b8; font-size:0.9rem;">-</p>
+        <hr style="border: 0; border-top: 1px solid var(--border); margin: 20px 0;">
+        <h4>📄 Technical Config (JSON)</h4>
+        <pre id="jsonViewer"></pre>
+        <button class="btn-copy" onclick="copyConfig()">📋 Copy Config</button>
+        <button class="btn-send" style="width:100%; margin-top:15px; background: transparent; border: 1px solid var(--primary);" onclick="alert('Forking...')">⚒ Fork / Deploy</button>
       </div>
     </div>
   </div>
 
   <script>
-    let currentId = null;
-    async function load() {
-      const r = await fetch('/api/models');
-      const data = await r.json();
-      document.getElementById('grid').innerHTML = data.map(m => `
+    let currentModelId = null;
+
+    async function loadModels() {
+      const res = await fetch('/api/models');
+      const models = await res.json();
+      document.getElementById('modelGrid').innerHTML = models.map(m => `
         <div class="card">
           <h3>${m.name}</h3>
           <p>${m.description}</p>
-          <button class="btn btn-chat" onclick="openM('${m.id}')">💬 Chat & Details</button>
+          <button class="btn-details" onclick="openDetails('${m.id}')">💬 Chat & Details</button>
         </div>
       `).join('');
     }
 
-    async function openM(id) {
-      currentId = id;
-      const r = await fetch(`/api/models/${id}`);
-      const m = await r.json();
-      document.getElementById('mTitle').textContent = m.name;
-      document.getElementById('json').textContent = JSON.stringify(m, null, 2);
-      document.getElementById('chatMsgs').innerHTML = '<div>System: SDK Connected.</div>';
-      document.getElementById('modal').classList.add('active');
+    async function openDetails(id) {
+      currentModelId = id;
+      const res = await fetch(`/api/models/${id}`);
+      const m = await res.json();
+      
+      document.getElementById('modalTitle').textContent = m.name;
+      document.getElementById('infoId').textContent = m.id;
+      document.getElementById('infoCat').textContent = m.category || 'General';
+      document.getElementById('infoDesc').textContent = m.description;
+      document.getElementById('jsonViewer').textContent = JSON.stringify(m, null, 2);
+      
+      document.getElementById('chatWall').innerHTML = '<div class="msg">Hello! I am an AI assistant for this model. How can I help you?</div>';
+      document.getElementById('detailsModal').classList.add('active');
     }
 
-    async function send() {
-      const val = document.getElementById('chatInput').value;
-      const r = await fetch('/api/chat', {
+    async function handleSend() {
+      const input = document.getElementById('userInput');
+      const msg = input.value.trim();
+      if(!msg) return;
+
+      const wall = document.getElementById('chatWall');
+      wall.innerHTML += `<div class="msg" style="border-color: var(--primary);"><strong>You:</strong> ${msg}</div>`;
+      input.value = '';
+      wall.scrollTop = wall.scrollHeight;
+
+      const res = await fetch('/api/chat', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ model_id: currentId, message: val })
+        body: JSON.stringify({ model_id: currentModelId, message: msg })
       });
-      const res = await r.json();
-      document.getElementById('chatMsgs').innerHTML += `<div>User: ${val}</div><div>Bot: ${res.reply}</div>`;
-      document.getElementById('chatInput').value = '';
+      const data = await res.json();
+      wall.innerHTML += `<div class="msg"><strong>Bot:</strong> ${data.reply}</div>`;
+      wall.scrollTop = wall.scrollHeight;
     }
 
-    async function openFork() {
-        const name = prompt("Enter new model name:");
-        if(!name) return;
-        await fetch('/api/models/create', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ name: name, description: "Forked model" })
-        });
-        alert("Deployed!");
-        closeM(); load();
+    function closeModal() { document.getElementById('detailsModal').classList.remove('active'); }
+    function copyConfig() {
+      navigator.clipboard.writeText(document.getElementById('jsonViewer').textContent);
+      alert('Config copied!');
     }
 
-    function closeM() { document.getElementById('modal').classList.remove('active'); }
-    load();
+    document.getElementById('userInput').addEventListener('keypress', (e) => { if(e.key === 'Enter') handleSend(); });
+    loadModels();
   </script>
 </body>
 </html>
