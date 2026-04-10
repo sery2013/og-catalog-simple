@@ -64,18 +64,38 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- ГЛАВНАЯ СТРАНИЦА (Исправлено для Render) ---
+# --- ИСПРАВЛЕННАЯ ОБРАБОТКА ГЛАВНОЙ СТРАНИЦЫ ---
 @app.get("/")
 async def read_index():
-    index_path = os.path.join(os.getcwd(), 'index.html')
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
-    else:
-        logger.error(f"❌ File not found: {index_path}")
-        return JSONResponse(
-            status_code=404, 
-            content={"error": "index.html not found on server. Ensure it is in the root directory."}
-        )
+    # Проверяем все возможные места нахождения файла
+    current_dir = os.getcwd()
+    possible_paths = [
+        os.path.join(current_dir, 'index.html'),
+        os.path.join(current_dir, 'frontend', 'index.html'),
+        os.path.join(current_dir, 'public', 'index.html'),
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            logger.info(f"✅ Found index.html at: {path}")
+            return FileResponse(path)
+    
+    # Если файл не найден, логируем структуру папок для отладки
+    files_present = []
+    for root, dirs, files in os.walk(current_dir):
+        for file in files:
+            files_present.append(os.path.join(root, file))
+            
+    logger.error(f"❌ index.html not found. Available files: {files_present}")
+    return JSONResponse(
+        status_code=404, 
+        content={
+            "error": "index.html not found on server", 
+            "hint": "Check if index.html is in your GitHub root",
+            "working_dir": current_dir,
+            "scanned_files": files_present[:15] # Показываем первые 15 файлов
+        }
+    )
 
 class CreateModelRequest(BaseModel):
     name: str
@@ -220,6 +240,6 @@ async def startup_event():
 
 if __name__ == "__main__":
     import uvicorn
-    # Поддержка порта Render
+    # Render передает PORT через окружение
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
