@@ -62,7 +62,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Монтируем папку static (для CSS, JS и чата)
+# Монтируем папку static
 static_path = os.path.join(os.getcwd(), 'static')
 if os.path.exists(static_path):
     app.mount("/static", StaticFiles(directory=static_path), name="static")
@@ -72,149 +72,102 @@ async def read_index():
     path = os.path.join(os.getcwd(), 'static', 'index.html')
     if os.path.exists(path):
         return FileResponse(path)
-    return JSONResponse(status_code=404, content={"error": "index.html missing in /static folder"})
+    return JSONResponse(status_code=404, content={"error": "index.html missing in /static"})
 
+# Модели запросов
 class CreateModelRequest(BaseModel):
     name: str
     description: str
     category: str = "General"
-    base_model: Optional[str] = None
 
-# --- Логика Парсинга и Наполнения ---
+class ChatRequest(BaseModel):
+    model_id: str
+    message: str
+
+# --- Логика Наполнения ---
 async def scrape_opengradient_hub():
     url = "https://hub.opengradient.ai/models"
-    # Эмуляция реального браузера для обхода блокировок
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
         "Referer": "https://hub.opengradient.ai/",
-        "Accept-Language": "en-US,en;q=0.9",
     }
-    
     db: Session = SessionLocal()
     added_count = 0
-    
     try:
-        logger.info(f"🔄 Attempting to sync with {url}...")
-        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=15.0) as client:
-            response = await client.get(url)
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.text, 'html.parser')
-                model_links = soup.find_all('a', href=True)
-                for link in model_links:
+        # Пытаемся парсить (если не заблокируют)
+        async with httpx.AsyncClient(headers=headers, timeout=10.0) as client:
+            res = await client.get(url)
+            if res.status_code == 200:
+                soup = BeautifulSoup(res.text, 'html.parser')
+                for link in soup.find_all('a', href=True):
                     href = link['href']
                     parts = [p for p in href.split('/') if p]
                     if len(parts) >= 3 and parts[0] == 'models':
                         m_id = f"{parts[1]}-{parts[2]}"
-                        m_name = parts[2].replace('-', ' ').title()
                         if not db.query(ModelDB).filter(ModelDB.id == m_id).first():
-                            db.add(ModelDB(
-                                id=m_id, name=m_name, category="Hub",
-                                description=f"AI model by {parts[1]} from OpenGradient.",
-                                stats={"likes": 45, "inferences": 890},
-                                raw_data={"source": "hub", "owner": parts[1]}
-                            ))
+                            db.add(ModelDB(id=m_id, name=parts[2].title(), category="Hub", description="Imported from OpenGradient Hub", stats={"likes": 40, "inferences": 200}))
                             added_count += 1
                 db.commit()
 
-        # Если моделей всё еще мало (или хаб заблокировал), добавляем расширенный список седов
-        total_in_db = db.query(ModelDB).count()
-        if total_in_db < 12:
-            logger.info("⚠️ Models count low. Injecting 16+ verified seed models...")
-            seeds = [
-                {"id": "stfu911-task-deviation", "name": "Task Deviation Corrector", "desc": "Analyzes and corrects AI task deviations in real-time."},
-                {"id": "llama-3-8b-og", "name": "Llama 3 8B (Optimized)", "desc": "High-throughput Llama 3 for OpenGradient TEE."},
-                {"id": "mistral-7b-v03", "name": "Mistral 7B v0.3", "desc": "Standard Mistral with extended 32k context."},
-                {"id": "phi-3-mini-4k", "name": "Phi-3 Mini 4K", "desc": "Microsoft's lightweight model for fast inference."},
-                {"id": "deepseek-coder-v2", "name": "DeepSeek Coder V2", "desc": "State-of-the-art coding assistant for Web3 developers."},
-                {"id": "gemma-7b-it", "name": "Gemma 7B IT", "desc": "Instruction-tuned model by Google DeepMind."},
-                {"id": "neural-chat-7b-v3", "name": "Neural Chat v3.3", "desc": "Optimized for chat and logical reasoning."},
-                {"id": "openhermes-mistral", "name": "OpenHermes 2.5", "desc": "Top-tier general purpose fine-tune of Mistral."},
-                {"id": "starling-7b-beta", "name": "Starling LM 7B Beta", "desc": "Reinforcement learning-based chat model."},
-                {"id": "qwen-1.5-14b-chat", "name": "Qwen 1.5 14B Chat", "desc": "Powerful multilingual model by Alibaba Cloud."},
-                {"id": "stable-code-3b", "name": "Stable Code 3B", "desc": "Fast local coding assistant."},
-                {"id": "tinyllama-1.1b", "name": "TinyLlama 1.1B", "desc": "Compact model for mobile and edge deployment."},
-                {"id": "solar-10.7b-inst", "name": "Solar 10.7B Instruct", "desc": "Advanced reasoning with compact parameter size."},
-                {"id": "yi-34b-chat-og", "name": "Yi 34B Chat", "desc": "Large-scale chat model from 01.AI."},
-                {"id": "command-r-v01", "name": "Command R", "desc": "Cohere's specialized model for RAG tasks."},
-                {"id": "dolphin-2.9-mixtral", "name": "Dolphin Mixtral 8x7B", "desc": "High-performance uncensored Mixture of Experts."}
-            ]
-            for s in seeds:
-                if not db.query(ModelDB).filter(ModelDB.id == s["id"]).first():
-                    db.add(ModelDB(
-                        id=s["id"], name=s["name"], description=s["desc"],
-                        category="Verified", is_live=True,
-                        stats={"likes": 125, "inferences": 3400},
-                        tags=["AI", "OpenGradient"]
-                    ))
-                    added_count += 1
-            db.commit()
-
+        # Гарантированные 16 моделей (включая stfu911)
+        seeds = [
+            {"id": "stfu911-task-deviation-corrector", "name": "Task Deviation Corrector", "desc": "Real-time correction for AI agent output variance."},
+            {"id": "llama-3-8b-og", "name": "Llama 3 8B (OG)", "desc": "Meta Llama optimized for OpenGradient TEE."},
+            {"id": "mistral-7b-v03", "name": "Mistral 7B v0.3", "desc": "Standard Mistral with extended 32k context."},
+            {"id": "phi-3-mini", "name": "Phi-3 Mini", "desc": "Microsoft lightweight model for fast Edge inference."},
+            {"id": "deepseek-coder", "name": "DeepSeek Coder 33B", "desc": "Advanced coding model for smart contract audits."},
+            {"id": "gemma-7b", "name": "Gemma 7B IT", "desc": "Google DeepMind instruction-tuned model."},
+            {"id": "neural-chat-7b", "name": "Neural Chat v3.3", "desc": "Intel-optimized model for logical reasoning."},
+            {"id": "openhermes-2.5", "name": "OpenHermes 2.5", "desc": "Diverse fine-tune of Mistral for general tasks."},
+            {"id": "starling-7b", "name": "Starling LM 7B", "desc": "RLHF-tuned model for superior chat performance."},
+            {"id": "qwen-1.5-14b", "name": "Qwen 1.5 14B", "desc": "Alibaba's robust multilingual LLM."},
+            {"id": "stable-code-3b", "name": "Stable Code 3B", "desc": "Efficient coding assistant for local dev."},
+            {"id": "tinyllama-1.1b", "name": "TinyLlama 1.1B", "desc": "Ultra-compact model for mobile devices."},
+            {"id": "solar-10.7b", "name": "Solar 10.7B", "desc": "Compact model with high reasoning capabilities."},
+            {"id": "yi-34b-chat", "name": "Yi 34B Chat", "desc": "Powerful large-scale model from 01.AI."},
+            {"id": "command-r", "name": "Command R", "desc": "Cohere's model specialized for RAG workflows."},
+            {"id": "dolphin-mixtral", "name": "Dolphin Mixtral", "desc": "Uncensored high-performance MoE model."}
+        ]
+        for s in seeds:
+            if not db.query(ModelDB).filter(ModelDB.id == s["id"]).first():
+                db.add(ModelDB(id=s["id"], name=s["name"], description=s["desc"], category="Verified", is_live=True, stats={"likes": 150, "inferences": 4200}))
+                added_count += 1
+        db.commit()
         db.add(SyncLog(models_added=added_count))
         db.commit()
-        logger.info(f"✅ Sync complete. Database updated.")
-
     except Exception as e:
-        logger.error(f"❌ Sync Error: {e}")
+        logger.error(f"Sync error: {e}")
     finally:
         db.close()
 
-# --- Эндпоинты API ---
-
+# --- API Endpoints ---
 @app.get("/api/models")
-def get_models(category: str = None, search: str = None):
+def get_models():
     db = SessionLocal()
-    try:
-        query = db.query(ModelDB)
-        if category and category != 'all':
-            query = query.filter(ModelDB.category == category)
-        if search:
-            query = query.filter(ModelDB.name.ilike(f"%{search}%"))
-        return query.order_by(ModelDB.updated_at.desc()).all()
-    finally:
-        db.close()
+    return db.query(ModelDB).all()
 
 @app.get("/api/models/{model_id}")
 def get_model(model_id: str):
     db = SessionLocal()
-    try:
-        m = db.query(ModelDB).filter(ModelDB.id == model_id).first()
-        if not m: raise HTTPException(status_code=404, detail="Model not found")
-        return m
-    finally:
-        db.close()
+    m = db.query(ModelDB).filter(ModelDB.id == model_id).first()
+    if not m: raise HTTPException(status_code=404)
+    return m
 
-@app.post("/api/models/create")
-def create_model(req: CreateModelRequest):
-    db = SessionLocal()
-    try:
-        new_id = f"user-{uuid.uuid4().hex[:8]}"
-        new_model = ModelDB(
-            id=new_id, name=req.name, description=req.description,
-            category=req.category, is_live=False,
-            tags=["user-created"], stats={"likes": 0, "inferences": 0}
-        )
-        db.add(new_model)
-        db.commit()
-        return {"status": "completed", "result": {"model_id": new_id}}
-    finally:
-        db.close()
+@app.post("/api/chat")
+async def chat(req: ChatRequest):
+    responses = {
+        "stfu911-task-deviation-corrector": "Detected task deviation: 0.05. Applying corrections via OpenGradient protocol...",
+        "llama-3-8b-og": "Llama 3 is ready for inference in the TEE environment. Secure session established.",
+    }
+    reply = responses.get(req.model_id, f"Hello! This is a secure response from {req.model_id} on OG Network.")
+    return {"reply": reply}
 
 @app.get("/api/stats")
 def get_stats():
     db = SessionLocal()
-    try:
-        total = db.query(ModelDB).count()
-        last_log = db.query(SyncLog).order_by(SyncLog.id.desc()).first()
-        return {
-            "total_models": total,
-            "live_models": total,
-            "total_likes": total * 85,
-            "total_inferences": total * 1100,
-            "last_sync": last_log.last_sync if last_log else datetime.utcnow()
-        }
-    finally:
-        db.close()
+    total = db.query(ModelDB).count()
+    last_log = db.query(SyncLog).order_by(SyncLog.id.desc()).first()
+    return {"total_models": total, "live_models": total, "total_likes": total * 115, "total_inferences": total * 890, "last_sync": last_log.last_sync if last_log else datetime.utcnow()}
 
 @app.on_event("startup")
 async def startup_event():
@@ -222,5 +175,4 @@ async def startup_event():
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
