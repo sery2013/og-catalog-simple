@@ -8,7 +8,7 @@ from datetime import datetime
 import httpx
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import Column, String, Integer, Boolean, Text, JSON, DateTime, create_engine
 from sqlalchemy.ext.declarative import declarative_base
@@ -64,9 +64,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- ГЛАВНАЯ СТРАНИЦА (Исправлено для Render) ---
 @app.get("/")
 async def read_index():
-    return FileResponse('index.html')
+    index_path = os.path.join(os.getcwd(), 'index.html')
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    else:
+        logger.error(f"❌ File not found: {index_path}")
+        return JSONResponse(
+            status_code=404, 
+            content={"error": "index.html not found on server. Ensure it is in the root directory."}
+        )
 
 class CreateModelRequest(BaseModel):
     name: str
@@ -145,68 +154,72 @@ async def scrape_opengradient_hub():
 @app.get("/api/models")
 def get_models(category: str = None, search: str = None):
     db = SessionLocal()
-    query = db.query(ModelDB)
-    if category and category != 'all':
-        query = query.filter(ModelDB.category == category)
-    if search:
-        query = query.filter(ModelDB.name.ilike(f"%{search}%"))
-    
-    models = query.order_by(ModelDB.updated_at.desc()).all()
-    db.close()
-    return models
+    try:
+        query = db.query(ModelDB)
+        if category and category != 'all':
+            query = query.filter(ModelDB.category == category)
+        if search:
+            query = query.filter(ModelDB.name.ilike(f"%{search}%"))
+        
+        models = query.order_by(ModelDB.updated_at.desc()).all()
+        return models
+    finally:
+        db.close()
 
 @app.get("/api/models/{model_id}")
 def get_model(model_id: str):
     db = SessionLocal()
-    m = db.query(ModelDB).filter(ModelDB.id == model_id).first()
-    db.close()
-    if not m: raise HTTPException(status_code=404)
-    return m
+    try:
+        m = db.query(ModelDB).filter(ModelDB.id == model_id).first()
+        if not m: raise HTTPException(status_code=404)
+        return m
+    finally:
+        db.close()
 
 @app.post("/api/models/create")
 def create_model(req: CreateModelRequest):
     db = SessionLocal()
-    new_id = f"user-{uuid.uuid4().hex[:8]}"
-    new_model = ModelDB(
-        id=new_id, name=req.name, description=req.description,
-        category=req.category, is_live=False,
-        tags=["user-created"], stats={"likes": 0, "inferences": 0},
-        raw_data={"model_name": req.name, "status": "deployed"}
-    )
-    db.add(new_model)
-    db.commit()
-    db.close()
-    return {"status": "completed", "result": {"model_id": new_id}}
+    try:
+        new_id = f"user-{uuid.uuid4().hex[:8]}"
+        new_model = ModelDB(
+            id=new_id, name=req.name, description=req.description,
+            category=req.category, is_live=False,
+            tags=["user-created"], stats={"likes": 0, "inferences": 0},
+            raw_data={"model_name": req.name, "status": "deployed"}
+        )
+        db.add(new_model)
+        db.commit()
+        return {"status": "completed", "result": {"model_id": new_id}}
+    finally:
+        db.close()
 
 @app.get("/api/stats")
 def get_stats():
     db = SessionLocal()
-    total = db.query(ModelDB).count()
-    last_log = db.query(SyncLog).order_by(SyncLog.id.desc()).first()
-    db.close()
-    
-    sync_date = last_log.last_sync if last_log else datetime.utcnow()
-    sync_count = last_log.models_added if last_log else 0
+    try:
+        total = db.query(ModelDB).count()
+        last_log = db.query(SyncLog).order_by(SyncLog.id.desc()).first()
+        
+        sync_date = last_log.last_sync if last_log else datetime.utcnow()
+        sync_count = last_log.models_added if last_log else 0
 
-    return {
-        "total_models": total,
-        "live_models": total,
-        "total_likes": total * 15 + 120,
-        "total_inferences": total * 120 + 450,
-        "last_sync": sync_date,
-        "sync_added": sync_count
-    }
-
-# --- ИСПРАВЛЕННЫЙ БЛОК ЗАПУСКА ---
+        return {
+            "total_models": total,
+            "live_models": total,
+            "total_likes": total * 15 + 120,
+            "total_inferences": total * 120 + 450,
+            "last_sync": sync_date,
+            "sync_added": sync_count
+        }
+    finally:
+        db.close()
 
 @app.on_event("startup")
 async def startup_event():
-    # Запускаем фоновую задачу аккуратно
     asyncio.create_task(scrape_opengradient_hub())
 
 if __name__ == "__main__":
     import uvicorn
-    # Render передает порт через переменную окружения PORT
+    # Поддержка порта Render
     port = int(os.environ.get("PORT", 8000))
-    # Запуск на хосте 0.0.0.0 обязателен для Docker/Render
     uvicorn.run(app, host="0.0.0.0", port=port)
