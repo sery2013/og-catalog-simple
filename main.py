@@ -37,12 +37,11 @@ class ModelDB(Base):
     raw_data = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-# --- ВАРИАНТ 1: ОЧИСТКА БАЗЫ (выполнится один раз при деплое) ---
-# Если ты уже успешно задеплоился и структура создалась, 
-# эту строку можно будет закомментировать (#), чтобы не терять созданные модели.
+# --- УПРАВЛЕНИЕ СТРУКТУРОЙ ---
+# Раскомментируй drop_all для полной очистки базы при деплое
 Base.metadata.drop_all(bind=engine) 
 Base.metadata.create_all(bind=engine)
-# -----------------------------------------------------------
+# -----------------------------
 
 app = FastAPI()
 
@@ -59,6 +58,7 @@ class ChatRequest(BaseModel):
 class CreateModelRequest(BaseModel):
     name: str
     description: str
+    base_model: str # Выбор базового движка
 
 # Эндпоинты
 @app.get("/")
@@ -69,19 +69,18 @@ async def read_index():
 def get_models():
     db = SessionLocal()
     try:
-        # Новые модели всегда в начале списка
+        # Сортировка: новые сверху
         return db.query(ModelDB).order_by(desc(ModelDB.created_at)).all()
     finally:
         db.close()
 
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
-    # Технические ответы в стиле OpenGradient SDK
     tech_responses = [
         f"Inference successful on TEE node #0x{uuid.uuid4().hex[:4]}. Latency: {random.randint(20, 95)}ms.",
         f"Verified via OpenGradient SDK. Integrity score: 0.999. Hash: 0x{uuid.uuid4().hex[:10]}",
-        f"Model {req.model_id} optimized. Secure enclave status: ACTIVE.",
-        f"Consensus reached across 7 nodes. Resource consumption: {random.uniform(0.1, 0.3):.3f} OG tokens."
+        f"Model {req.model_id} optimized. Resource usage: {random.uniform(0.1, 0.3):.3f} tokens.",
+        f"Consensus reached. Secure enclave status: ACTIVE."
     ]
     return {"reply": random.choice(tech_responses)}
 
@@ -89,16 +88,22 @@ async def chat(req: ChatRequest):
 def create_model(req: CreateModelRequest):
     db = SessionLocal()
     try:
-        new_id = f"custom-{uuid.uuid4().hex[:6]}"
+        # ID теперь включает имя базовой модели
+        new_id = f"{req.base_model.lower()}-{uuid.uuid4().hex[:4]}"
         new_model = ModelDB(
             id=new_id,
             name=req.name,
             description=req.description,
-            category="Custom",
+            category="AI Model",
             type="USER", 
             is_live=True,
             stats={"likes": 0, "inferences": 0},
-            raw_data={"version": "1.0-user", "status": "deployed", "deployment_hash": uuid.uuid4().hex},
+            raw_data={
+                "base_engine": req.base_model,
+                "status": "deployed",
+                "sdk_version": "0.4.2",
+                "deployment_hash": uuid.uuid4().hex
+            },
             created_at=datetime.utcnow() 
         )
         db.add(new_model)
@@ -106,24 +111,18 @@ def create_model(req: CreateModelRequest):
         return {"status": "success", "id": new_id}
     except Exception as e:
         db.rollback()
-        logger.error(f"Error creating model: {e}")
-        raise HTTPException(status_code=500, detail="Deployment failed")
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
 
-# Первоначальное наполнение для красоты
 async def init_db():
     db = SessionLocal()
     try:
         if db.query(ModelDB).count() == 0:
-            # Создаем список из 10+ моделей для заполнения сетки
             seeds = [
                 {"id": "llama-3-8b", "name": "Llama 3 8B Gradient", "desc": "Meta's latest model optimized by Gradient.", "type": "BASE"},
                 {"id": "mistral-7b", "name": "Mistral 7B v0.3", "desc": "High-performance compact NLP model.", "type": "LIVE"},
-                {"id": "phi-3-mini", "name": "Phi-3 Mini 4K", "desc": "Microsoft lightweight small language model.", "type": "BASE"},
-                {"id": "gemma-7b", "name": "Gemma 7B", "desc": "Google's open-weights model built from Gemini technology.", "type": "LIVE"},
-                {"id": "neural-chat-v3", "name": "Neural Chat v3.3", "desc": "Intel-optimized chat model for high-speed inference.", "type": "LIVE"},
-                {"id": "stfu911-corrector", "name": "Task Deviation Corrector", "desc": "Real-time correction for agentic output variance.", "type": "USER"}
+                {"id": "phi-3-mini", "name": "Phi-3 Mini 4K", "desc": "Microsoft lightweight small language model.", "type": "BASE"}
             ]
             for s in seeds:
                 db.add(ModelDB(
@@ -134,9 +133,6 @@ async def init_db():
                     created_at=datetime.utcnow()
                 ))
             db.commit()
-            logger.info("Database initialized with seed models.")
-    except Exception as e:
-        logger.error(f"Seeding error: {e}")
     finally:
         db.close()
 
