@@ -9,49 +9,36 @@
     * { box-sizing: border-box; font-family: 'Inter', sans-serif; }
     body { background: var(--bg); color: #fff; margin: 0; padding-bottom: 50px; }
 
-    /* Название сайта */
     .brand-header { padding: 40px 20px 10px; max-width: 1200px; margin: 0 auto; display: flex; align-items: center; gap: 12px; }
     .brand-logo { width: 24px; height: 24px; background: #3b82f6; transform: rotate(45deg); }
-    .brand-title { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+    .brand-title { font-size: 28px; font-weight: 800; }
 
-    /* Статистика */
-    .stats-container { display: flex; justify-content: center; gap: 60px; padding: 30px; background: rgba(20, 184, 166, 0.03); border-bottom: 1px solid var(--border); margin-bottom: 30px; }
+    .stats-container { display: flex; justify-content: center; gap: 60px; padding: 30px; border-bottom: 1px solid var(--border); margin-bottom: 30px; }
     .stat-box { text-align: center; }
     .stat-num { display: block; font-size: 32px; font-weight: 800; color: #22d3ee; }
-    .stat-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; }
+    .stat-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; }
 
-    /* Панель управления */
     .controls { max-width: 1200px; margin: 0 auto 30px; padding: 0 20px; display: flex; gap: 15px; }
-    .search-input { flex: 1; background: #111827; border: 1px solid var(--border); padding: 14px 20px; border-radius: 10px; color: white; font-size: 15px; }
+    .search-input { flex: 1; background: #111827; border: 1px solid var(--border); padding: 14px 20px; border-radius: 10px; color: white; }
     .btn-create { background: var(--primary); color: #000; border: none; padding: 0 25px; border-radius: 10px; font-weight: 700; cursor: pointer; }
 
-    /* Сетка моделей */
     .grid { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 25px; padding: 0 20px; }
-    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 24px; position: relative; transition: 0.2s; }
-    .card:hover { border-color: var(--primary); }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 24px; position: relative; }
     .badge { position: absolute; top: 20px; right: 20px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 800; }
-    .badge.live { background: #f97316; color: white; }
-    .badge.base { background: #14b8a6; color: white; }
+    .badge.live { background: #f97316; } .badge.base { background: #14b8a6; }
     .card-title { font-size: 18px; font-weight: 700; margin: 0 0 12px; }
-    .card-desc { color: var(--text-muted); font-size: 14px; line-height: 1.5; height: 42px; overflow: hidden; margin-bottom: 20px; }
-    .card-stats { display: flex; gap: 15px; font-size: 14px; font-weight: 600; margin-bottom: 20px; }
-    .btn-action { background: var(--primary); color: white; border: none; padding: 14px; border-radius: 10px; width: 100%; font-weight: 700; cursor: pointer; font-size: 15px; }
+    .card-stats { display: flex; gap: 15px; font-size: 14px; margin-bottom: 20px; }
+    .btn-action { background: #06b6d4; color: white; border: none; padding: 14px; border-radius: 10px; width: 100%; font-weight: 700; cursor: pointer; }
 
-    /* Модальное окно */
-    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 2000; align-items: center; justify-content: center; }
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 2000; align-items: center; justify-content: center; }
     .modal.active { display: flex; }
-    .modal-content { background: #1e293b; width: 95%; max-width: 1100px; border-radius: 20px; padding: 30px; display: grid; grid-template-columns: 1.4fr 1fr; gap: 30px; position: relative; }
+    .modal-content { background: #1e293b; width: 95%; max-width: 1000px; border-radius: 20px; padding: 30px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 25px; }
     
-    .chat-section { display: flex; flex-direction: column; gap: 15px; }
-    .chat-wall { background: #000; border-radius: 12px; height: 350px; overflow-y: auto; padding: 20px; border: 1px solid var(--border); }
-    .msg { margin-bottom: 15px; line-height: 1.4; font-size: 14px; color: #e2e8f0; }
+    .chat-wall { background: #000; border-radius: 12px; height: 300px; overflow-y: auto; padding: 15px; border: 1px solid var(--border); margin-bottom: 15px; }
+    .msg { margin-bottom: 10px; font-size: 14px; }
+    .msg-bot { color: #22d3ee; }
     .chat-input-row { display: flex; gap: 10px; }
-    .msg-input { flex: 1; background: transparent; border: 1px solid var(--border); padding: 15px; border-radius: 10px; color: white; outline: none; }
-    .btn-send { background: #06b6d4; color: white; border: none; padding: 0 40px; border-radius: 10px; font-weight: 800; cursor: pointer; text-transform: uppercase; }
-
-    /* JSON блок */
-    .config-section h4 { margin: 0 0 15px; color: #94a3b8; font-size: 13px; text-transform: uppercase; }
-    pre { background: #000; color: #4ade80; padding: 20px; border-radius: 12px; font-size: 12px; overflow: auto; max-height: 300px; border: 1px solid #334155; }
+    pre { background: #000; color: #4ade80; padding: 15px; border-radius: 10px; font-size: 11px; overflow: auto; max-height: 350px; }
   </style>
 </head>
 <body>
@@ -78,18 +65,18 @@
   <div class="modal" id="chatModal">
     <div class="modal-content">
       <div class="chat-section">
-        <h2 id="modalName" style="margin:0">Model Name</h2>
+        <h2 id="modalName" style="margin:0 0 20px">Model</h2>
         <div class="chat-wall" id="chatWall"></div>
         <div class="chat-input-row">
-          <input type="text" class="msg-input" id="userInput" placeholder="Type a message...">
-          <button class="btn-send" onclick="sendMessage()">Send</button>
+          <input type="text" id="userInput" class="search-input" placeholder="Type a message...">
+          <button class="btn-create" style="background:#06b6d4" onclick="sendMessage()">Send</button>
         </div>
-        <button onclick="closeModals()" style="background:none; border:none; color:#64748b; cursor:pointer; font-weight:bold;">Close</button>
+        <button onclick="closeModals()" style="margin-top:15px; background:none; border:none; color:var(--text-muted); cursor:pointer;">Close</button>
       </div>
       <div class="config-section">
-        <h4>Technical Config</h4>
+        <h4 style="color:var(--text-muted)">TECHNICAL CONFIG</h4>
         <pre id="jsonContent"></pre>
-        <button class="btn-action" style="background:#0891b2" onclick="openCreateModal(true)">🛠 Fork / Deploy</button>
+        <button class="btn-action" style="margin-top:15px" onclick="openCreateModal(true)">🛠 Fork / Deploy</button>
       </div>
     </div>
   </div>
@@ -98,10 +85,16 @@
     <div class="modal-content" style="display:block; max-width:500px;">
       <h2 id="createTitle">Deploy New Model</h2>
       <div style="display:flex; flex-direction:column; gap:15px; margin-top:20px;">
-        <input type="text" id="newName" class="search-input" placeholder="Enter model name...">
-        <textarea id="newDesc" class="search-input" style="height:100px;" placeholder="Model description..."></textarea>
-        <button class="btn-action" onclick="submitNewModel()">Confirm Deployment</button>
-        <button onclick="closeModals()" style="background:none; border:none; color:#64748b; cursor:pointer;">Cancel</button>
+        <label style="font-size:11px; color:var(--text-muted)">SELECT BASE ENGINE</label>
+        <select id="baseModelSelect" class="search-input" style="background:#000">
+            <option value="Llama-3">Llama 3 8B (Meta)</option>
+            <option value="Mistral">Mistral 7B v0.3</option>
+            <option value="Phi-3">Phi-3 Mini (Microsoft)</option>
+        </select>
+        <input type="text" id="newName" class="search-input" placeholder="Model Name (e.g. My-Expert-Bot)">
+        <textarea id="newDesc" class="search-input" style="height:80px" placeholder="Description..."></textarea>
+        <button class="btn-action" onclick="submitNewModel()">🚀 Deploy to Network</button>
+        <button onclick="closeModals()" style="background:none; border:none; color:var(--text-muted); cursor:pointer;">Cancel</button>
       </div>
     </div>
   </div>
@@ -119,45 +112,40 @@
     function renderModels() {
       const query = document.getElementById('searchBox').value.toLowerCase();
       const filtered = modelsData.filter(m => m.name.toLowerCase().includes(query));
-      
       document.getElementById('modelGrid').innerHTML = filtered.map(m => `
         <div class="card">
           <div class="badge ${m.type === 'USER' ? 'base' : 'live'}">${m.type || 'LIVE'}</div>
           <h3 class="card-title">${m.name}</h3>
-          <p class="card-desc">${m.description || 'No description available.'}</p>
-          <div class="card-stats">
-            <span>❤️ ${m.stats?.likes || 0}</span>
-            <span>⚡ ${m.stats?.inferences || 0}</span>
-          </div>
+          <p style="color:var(--text-muted); font-size:14px">${m.description || ''}</p>
+          <div class="card-stats"><span>❤️ ${m.stats?.likes || 0}</span><span>⚡ ${m.stats?.inferences || 0}</span></div>
           <button class="btn-action" onclick="openChat('${m.id}')">💬 Chat & Details</button>
         </div>
       `).join('');
     }
 
-    async function openChat(id) {
+    function openChat(id) {
       currentId = id;
       const m = modelsData.find(x => x.id === id);
       document.getElementById('modalName').textContent = m.name;
       document.getElementById('jsonContent').textContent = JSON.stringify(m, null, 2);
-      document.getElementById('chatWall').innerHTML = '<div class="msg"><b>System:</b> Connection established.</div>';
+      document.getElementById('chatWall').innerHTML = '<div class="msg"><b>System:</b> Secure SDK connection established.</div>';
       document.getElementById('chatModal').classList.add('active');
     }
 
     async function sendMessage() {
       const input = document.getElementById('userInput');
-      const val = input.value; if(!val) return;
-      
+      if(!input.value) return;
       const wall = document.getElementById('chatWall');
-      wall.innerHTML += `<div class="msg"><b>User:</b> ${val}</div>`;
-      input.value = '';
-
+      wall.innerHTML += `<div class="msg"><b>User:</b> ${input.value}</div>`;
+      
       const r = await fetch('/api/chat', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ model_id: currentId, message: val })
+        body: JSON.stringify({ model_id: currentId, message: input.value })
       });
       const data = await r.json();
-      wall.innerHTML += `<div class="msg" style="color:#22d3ee"><b>Bot:</b> ${data.reply}</div>`;
+      wall.innerHTML += `<div class="msg msg-bot"><b>Bot:</b> ${data.reply}</div>`;
+      input.value = '';
       wall.scrollTop = wall.scrollHeight;
     }
 
@@ -165,12 +153,7 @@
       if(isFork) {
         const m = modelsData.find(x => x.id === currentId);
         document.getElementById('newName').value = "fork-" + m.name;
-        document.getElementById('newDesc').value = "Forked from " + m.id;
         document.getElementById('createTitle').textContent = "Fork Model";
-      } else {
-        document.getElementById('newName').value = "";
-        document.getElementById('newDesc').value = "";
-        document.getElementById('createTitle').textContent = "Deploy New Model";
       }
       document.getElementById('chatModal').classList.remove('active');
       document.getElementById('createModal').classList.add('active');
@@ -179,20 +162,20 @@
     async function submitNewModel() {
       const name = document.getElementById('newName').value;
       const desc = document.getElementById('newDesc').value;
-      if(!name) return alert("Please enter a name");
+      const base = document.getElementById('baseModelSelect').value;
+      if(!name) return alert("Enter name");
 
       await fetch('/api/models/create', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ name: name, description: desc })
+        body: JSON.stringify({ name, description: desc, base_model: base })
       });
-      
       closeModals();
       load();
     }
 
     function closeModals() {
-      document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+        document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
     }
 
     load();
