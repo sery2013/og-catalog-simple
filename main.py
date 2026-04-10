@@ -24,25 +24,25 @@ engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} i
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# Обновленная модель таблицы (с колонками type и created_at)
+# Модель таблицы
 class ModelDB(Base):
     __tablename__ = "models"
     id = Column(String, primary_key=True, index=True)
     name = Column(String)
     description = Column(Text)
     category = Column(String)
-    type = Column(String, default="BASE")  # Та самая колонка из ошибки
+    type = Column(String, default="BASE") 
     is_live = Column(Boolean, default=True)
     stats = Column(JSON)
     raw_data = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-# --- ВАРИАНТ 1: ПЕРЕЗАГРУЗКА СТРУКТУРЫ ---
-# Удаляем старую таблицу, чтобы избежать ошибок UndefinedColumn
+# --- ВАРИАНТ 1: ОЧИСТКА БАЗЫ (выполнится один раз при деплое) ---
+# Если ты уже успешно задеплоился и структура создалась, 
+# эту строку можно будет закомментировать (#), чтобы не терять созданные модели.
 Base.metadata.drop_all(bind=engine) 
-# Создаем заново со всеми полями
 Base.metadata.create_all(bind=engine)
-# ---------------------------------------
+# -----------------------------------------------------------
 
 app = FastAPI()
 
@@ -69,31 +69,19 @@ async def read_index():
 def get_models():
     db = SessionLocal()
     try:
-        # Сортировка по дате создания: самые новые — в начале списка
+        # Новые модели всегда в начале списка
         return db.query(ModelDB).order_by(desc(ModelDB.created_at)).all()
-    finally:
-        db.close()
-
-@app.get("/api/models/{model_id}")
-def get_model(model_id: str):
-    db = SessionLocal()
-    try:
-        m = db.query(ModelDB).filter(ModelDB.id == model_id).first()
-        if not m:
-            raise HTTPException(status_code=404, detail="Model not found")
-        return m
     finally:
         db.close()
 
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
-    # Разнообразные ответы в стиле SDK (как на скриншотах)
+    # Технические ответы в стиле OpenGradient SDK
     tech_responses = [
         f"Inference successful on TEE node #0x{uuid.uuid4().hex[:4]}. Latency: {random.randint(20, 95)}ms.",
         f"Verified via OpenGradient SDK. Integrity score: 0.999. Hash: 0x{uuid.uuid4().hex[:10]}",
-        f"Model {req.model_id} optimized. Resource usage: {random.uniform(0.1, 0.3):.3f} tokens.",
-        f"Consensus reached. Secure enclave status: ACTIVE.",
-        f"Gradient SDK response: Output matches TEE verification parameters."
+        f"Model {req.model_id} optimized. Secure enclave status: ACTIVE.",
+        f"Consensus reached across 7 nodes. Resource consumption: {random.uniform(0.1, 0.3):.3f} OG tokens."
     ]
     return {"reply": random.choice(tech_responses)}
 
@@ -107,44 +95,48 @@ def create_model(req: CreateModelRequest):
             name=req.name,
             description=req.description,
             category="Custom",
-            type="USER", # Новая модель помечается как пользовательская
+            type="USER", 
             is_live=True,
             stats={"likes": 0, "inferences": 0},
-            raw_data={"version": "1.0-user", "status": "deployed"},
-            created_at=datetime.utcnow() # Устанавливаем текущее время для сортировки
+            raw_data={"version": "1.0-user", "status": "deployed", "deployment_hash": uuid.uuid4().hex},
+            created_at=datetime.utcnow() 
         )
         db.add(new_model)
         db.commit()
         return {"status": "success", "id": new_id}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error creating model: {e}")
+        raise HTTPException(status_code=500, detail="Deployment failed")
     finally:
         db.close()
 
-# Наполнение базы стартовыми моделями
+# Первоначальное наполнение для красоты
 async def init_db():
     db = SessionLocal()
     try:
         if db.query(ModelDB).count() == 0:
+            # Создаем список из 10+ моделей для заполнения сетки
             seeds = [
-                {"id": "llama-3-8b", "name": "Llama 3 8B Gradient", "desc": "Meta's latest model optimized by Gradient.", "cat": "LLM", "type": "BASE"},
-                {"id": "mistral-7b", "name": "Mistral 7B v0.3", "desc": "High-performance compact NLP model.", "cat": "General", "type": "LIVE"},
-                {"id": "phi-3-mini", "name": "Phi-3 Mini 4K", "desc": "Microsoft lightweight small language model.", "cat": "Edge AI", "type": "BASE"}
+                {"id": "llama-3-8b", "name": "Llama 3 8B Gradient", "desc": "Meta's latest model optimized by Gradient.", "type": "BASE"},
+                {"id": "mistral-7b", "name": "Mistral 7B v0.3", "desc": "High-performance compact NLP model.", "type": "LIVE"},
+                {"id": "phi-3-mini", "name": "Phi-3 Mini 4K", "desc": "Microsoft lightweight small language model.", "type": "BASE"},
+                {"id": "gemma-7b", "name": "Gemma 7B", "desc": "Google's open-weights model built from Gemini technology.", "type": "LIVE"},
+                {"id": "neural-chat-v3", "name": "Neural Chat v3.3", "desc": "Intel-optimized chat model for high-speed inference.", "type": "LIVE"},
+                {"id": "stfu911-corrector", "name": "Task Deviation Corrector", "desc": "Real-time correction for agentic output variance.", "type": "USER"}
             ]
             for s in seeds:
                 db.add(ModelDB(
-                    id=s["id"], 
-                    name=s["name"], 
-                    description=s["desc"], 
-                    category=s["cat"],
-                    type=s["type"],
-                    stats={"likes": random.randint(50, 500), "inferences": random.randint(1000, 5000)},
+                    id=s["id"], name=s["name"], description=s["desc"],
+                    category="General", type=s["type"],
+                    stats={"likes": random.randint(100, 500), "inferences": random.randint(1000, 9000)},
                     raw_data={"provider": "OpenGradient", "tier": "Verified"},
                     created_at=datetime.utcnow()
                 ))
             db.commit()
-            logger.info("DB Seeded!")
+            logger.info("Database initialized with seed models.")
+    except Exception as e:
+        logger.error(f"Seeding error: {e}")
     finally:
         db.close()
 
