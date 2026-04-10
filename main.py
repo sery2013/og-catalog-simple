@@ -9,7 +9,8 @@ import httpx
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy import create_all, Column, String, Integer, Boolean, Text, JSON, DateTime, create_engine
+# ИСПРАВЛЕНО: удален create_all из импорта, так как он не нужен здесь
+from sqlalchemy import Column, String, Integer, Boolean, Text, JSON, DateTime, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from bs4 import BeautifulSoup
@@ -19,13 +20,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # --- Настройка БД ---
-# Render предоставляет DATABASE_URL. Если её нет, используем локальную sqlite для тестов
 DATABASE_URL = os.getenv("DATABASE_URL")
+
+# Исправление протокола для SQLAlchemy 1.4+
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 if not DATABASE_URL:
-    logger.warning("⚠️ DATABASE_URL not found, using SQLite memory mode")
+    logger.warning("⚠️ DATABASE_URL not found, using SQLite test.db")
     DATABASE_URL = "sqlite:///./test.db"
 
 engine = create_engine(DATABASE_URL)
@@ -51,7 +53,7 @@ class SyncLog(Base):
     last_sync = Column(DateTime, default=datetime.utcnow)
     models_added = Column(Integer, default=0)
 
-# Создаем таблицы
+# Создаем таблицы (используем встроенный метод метаданных)
 Base.metadata.create_all(bind=engine)
 
 # --- FastAPI App ---
@@ -74,7 +76,9 @@ class CreateModelRequest(BaseModel):
 # --- Логика Парсинга (Scraping) ---
 async def scrape_opengradient_hub():
     url = "https://hub.opengradient.ai/models"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
     
     logger.info(f"🔄 Starting HTML scrape from {url}...")
     
@@ -86,8 +90,6 @@ async def scrape_opengradient_hub():
                 return
 
             soup = BeautifulSoup(response.text, 'html.parser')
-            # Ищем все ссылки на модели, обычно они в тегах <a> внутри карточек
-            # На hub.opengradient.ai модели лежат в ссылках начинающихся на /models/
             model_links = soup.find_all('a', href=True)
             added_count = 0
             
@@ -96,9 +98,9 @@ async def scrape_opengradient_hub():
                 href = link['href']
                 if href.startswith('/models/'):
                     m_id = href.replace('/models/', '')
+                    # Формируем красивое имя из ID
                     m_name = m_id.split('/')[-1].replace('-', ' ').title()
                     
-                    # Проверяем, есть ли уже такая модель
                     existing = db.query(ModelDB).filter(ModelDB.id == m_id).first()
                     if not existing:
                         new_model = ModelDB(
@@ -108,12 +110,12 @@ async def scrape_opengradient_hub():
                             category="General",
                             is_live=True,
                             tags=["automated-import", "hub"],
-                            stats={"likes": 12, "inferences": 140}
+                            stats={"likes": 12, "inferences": 140},
+                            raw_data={"source": "hub", "path": href} # Данные для копирования конфига
                         )
                         db.add(new_model)
                         added_count += 1
             
-            # Логируем синхронизацию
             db.add(SyncLog(models_added=added_count))
             db.commit()
             db.close()
@@ -122,7 +124,7 @@ async def scrape_opengradient_hub():
         except Exception as e:
             logger.error(f"❌ Scrape error: {e}")
 
-# --- Эндпоинты ---
+# --- Эндпоинты API ---
 
 @app.get("/api/models")
 def get_models(category: str = None, search: str = None):
@@ -142,7 +144,8 @@ def get_model(model_id: str):
     db = SessionLocal()
     m = db.query(ModelDB).filter(ModelDB.id == model_id).first()
     db.close()
-    if not m: raise HTTPException(404)
+    if not m:
+        raise HTTPException(status_code=404, detail="Model not found")
     return m
 
 @app.post("/api/models/create")
@@ -156,7 +159,12 @@ def create_model(req: CreateModelRequest):
         category=req.category,
         is_live=False,
         tags=["user-created"],
-        stats={"likes": 0, "inferences": 0}
+        stats={"likes": 0, "inferences": 0},
+        raw_data={
+            "model_name": req.name,
+            "base": req.base_model or "unknown",
+            "status": "deployed"
+        }
     )
     db.add(new_model)
     db.commit()
@@ -179,10 +187,10 @@ def get_stats():
         "sync_added": last_log.models_added if last_log else 0
     }
 
-# --- Фоновые задачи ---
+# --- Запуск задач ---
 @app.on_event("startup")
 async def startup_event():
-    # Запускаем парсинг при старте в фоне
+    # Запуск парсинга в фоновом потоке
     asyncio.create_task(scrape_opengradient_hub())
 
 if __name__ == "__main__":
