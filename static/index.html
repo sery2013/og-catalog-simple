@@ -92,7 +92,6 @@
     <div class="grid" id="grid"><p class="loading">⏳ Loading models...</p></div>
   </div>
 
-  <!-- Chat Modal -->
   <div class="modal" id="chatModal">
     <div class="modal-content" style="max-width:1000px;">
       <div class="modal-header"><h3 id="chatTitle">💬 Chat</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>
@@ -103,7 +102,6 @@
     </div>
   </div>
 
-  <!-- Create Modal -->
   <div class="modal" id="createModal">
     <div class="modal-content">
       <div class="modal-header"><h3>🛠 Create Model</h3><button class="modal-close" onclick="closeCreate()">&times;</button></div>
@@ -120,7 +118,14 @@
   </div>
 
   <script>
-    const API = '';
+    // === ВНИМАНИЕ: ЗАМЕНИТЕ ЭТУ СТРОКУ ===
+    // Вставьте сюда URL вашего задеплоенного Python-бэкенда с Render
+    // Адрес должен выглядеть примерно так: https://opengradient-tests.onrender.com
+    const API = 'https://opengradient-tests.onrender.com';
+    
+    // Оставляем пустую строку, если вы используете FastAPI StaticFiles
+    // const API = ''; 
+
     let curModel = null, sessId = null;
 
     async function loadSyncStatus() {
