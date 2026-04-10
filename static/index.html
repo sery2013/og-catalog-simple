@@ -7,213 +7,116 @@
   <style>
     :root { --primary: #06B6D4; --primary-dark: #0891B2; --primary-light: #22D3EE; --accent: #14B8A6; --bg-dark: #0F172A; --bg-card: rgba(15, 23, 42, 0.7); --text: #F8FAFC; --text-secondary: #94A3B8; --border: rgba(34, 211, 238, 0.3); --radius: 12px; --live: #ef4444; --live-orange: #f97316; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg-dark); color: var(--text); min-height: 100vh; position: relative; overflow-x: hidden; }
-    body::before { content: ''; position: fixed; inset: 0; background: linear-gradient(135deg, rgba(6,182,212,0.1) 0%, transparent 50%), linear-gradient(225deg, rgba(20,184,166,0.1) 0%, transparent 50%); pointer-events: none; z-index: 0; }
-    .container { max-width: 1400px; margin: 0 auto; padding: 40px 20px; position: relative; z-index: 1; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg-dark); color: var(--text); overflow-x: hidden; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 40px 20px; }
     header { text-align: center; margin-bottom: 40px; padding: 40px; background: rgba(15,23,42,0.6); backdrop-filter: blur(20px); border: 1px solid var(--border); border-radius: var(--radius); }
-    h1 { font-size: 3rem; font-weight: 800; background: linear-gradient(135deg, var(--primary-light), var(--primary), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 12px; }
-    .subtitle { color: var(--text-secondary); font-size: 1.2rem; }
-    .stats-bar { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; margin-bottom: 40px; padding: 24px 32px; background: linear-gradient(135deg, rgba(6,182,212,0.15), rgba(20,184,166,0.1)); backdrop-filter: blur(20px); border: 1px solid var(--border); border-radius: var(--radius); }
-    .stat-item { text-align: center; padding: 12px 24px; }
-    .stat-value { font-size: 2rem; font-weight: 800; display: block; background: linear-gradient(135deg, var(--primary-light), var(--primary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .stat-label { font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; }
-    .filters { display: flex; gap: 15px; margin-bottom: 40px; flex-wrap: wrap; }
-    .filters input, .filters select { flex: 1; min-width: 200px; padding: 16px 20px; font-size: 15px; border: 1px solid var(--border); border-radius: var(--radius); background: rgba(15,23,42,0.8); color: var(--text); }
+    h1 { font-size: 3rem; background: linear-gradient(135deg, var(--primary-light), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .stats-bar { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; margin-bottom: 40px; padding: 24px; background: rgba(6,182,212,0.1); border: 1px solid var(--border); border-radius: var(--radius); }
+    .stat-item { text-align: center; padding: 0 20px; }
+    .stat-value { font-size: 2rem; font-weight: 800; color: var(--primary-light); display: block; }
+    .stat-label { font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 28px; }
-    .card { background: var(--bg-card); backdrop-filter: blur(20px); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; transition: all 0.3s; position: relative; overflow: hidden; }
-    .card:hover { transform: translateY(-8px); border-color: var(--primary-light); box-shadow: 0 20px 60px rgba(6,182,212,0.4); }
-    .badge { background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-    .badge-live { background: linear-gradient(135deg, var(--live), var(--live-orange)); animation: pulse 2s infinite; }
-    @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); } 50% { box-shadow: 0 0 0 10px rgba(239,68,68,0); } }
+    .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; transition: 0.3s; }
+    .card:hover { transform: translateY(-5px); border-color: var(--primary-light); }
+    .badge { background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; padding: 4px 10px; border-radius: 20px; font-size: 11px; }
+    .badge-live { background: linear-gradient(135deg, var(--live), var(--live-orange)); }
     .buttons { display: flex; gap: 12px; margin-top: 24px; }
-    .btn { flex: 1; text-align: center; padding: 14px 20px; border-radius: var(--radius); font-weight: 600; font-size: 14px; cursor: pointer; border: 1px solid var(--border); transition: all 0.3s; }
-    .btn-primary { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: #fff; border: none; }
+    .btn { flex: 1; padding: 12px; border-radius: var(--radius); font-weight: 600; cursor: pointer; border: 1px solid var(--border); transition: 0.3s; }
+    .btn-primary { background: var(--primary); color: #fff; border: none; }
     .btn-secondary { background: rgba(6,182,212,0.1); color: var(--primary-light); }
-    .modal { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.9); backdrop-filter: blur(10px); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+    .modal { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.9); z-index: 100; align-items: center; justify-content: center; }
     .modal.active { display: flex; }
-    .modal-content { background: linear-gradient(135deg, rgba(15,23,42,0.95), rgba(30,41,59,0.95)); border: 1px solid var(--border); border-radius: var(--radius); padding: 32px; max-width: 1100px; width: 100%; max-height: 90vh; overflow-y: auto; }
-    .chat-layout { display: grid; grid-template-columns: 1fr 340px; gap: 24px; margin-top: 20px; }
-    @media (max-width: 900px) { .chat-layout { grid-template-columns: 1fr; } }
-    .messages { height: 400px; overflow-y: auto; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); background: rgba(0,0,0,0.2); margin-bottom: 15px; }
-    .message { margin-bottom: 12px; padding: 12px; border-radius: 8px; font-size: 14px; }
-    .message.user { background: var(--primary); color: white; align-self: flex-end; }
+    .modal-content { background: #1e293b; border: 1px solid var(--border); border-radius: var(--radius); padding: 32px; width: 90%; max-width: 1000px; }
+    .chat-layout { display: grid; grid-template-columns: 1fr 300px; gap: 24px; margin-top: 20px; }
+    .messages { height: 350px; overflow-y: auto; padding: 15px; background: rgba(0,0,0,0.2); border-radius: var(--radius); margin-bottom: 15px; border: 1px solid var(--border); }
+    .message { margin-bottom: 10px; padding: 10px; border-radius: 8px; font-size: 14px; max-width: 80%; }
+    .message.user { background: var(--primary); align-self: flex-end; margin-left: auto; }
     .message.bot { background: rgba(255,255,255,0.05); border: 1px solid var(--border); }
-    .model-sidebar { background: rgba(255,255,255,0.03); padding: 20px; border-radius: var(--radius); border: 1px solid var(--border); }
-    pre#rawCodeBlock { background: #000; color: #0f0; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 11px; overflow-x: auto; max-height: 300px; border: 1px solid #333; }
-    .sync-status { text-align: center; padding: 12px; margin-bottom: 20px; border-radius: var(--radius); font-size: 13px; border: 1px solid var(--border); }
+    .sync-status { text-align: center; padding: 10px; font-size: 12px; color: var(--text-secondary); }
   </style>
 </head>
 <body>
   <div class="container">
-    <header>
-      <h1>🔷 OpenGradient Catalog</h1>
-      <p class="subtitle">Decentralized AI Model Hub • Live Sync Every 24h</p>
-    </header>
+    <header><h1>🔷 OpenGradient Catalog</h1><p>Decentralized AI Model Hub • 16+ Verified Models</p></header>
     <div class="sync-status" id="syncStatus">🔄 Loading sync status...</div>
-    
-    <div class="stats-bar">
-      <div class="stat-item"><span class="stat-value" id="statModels">-</span><span class="stat-label">Total Models</span></div>
-      <div class="stat-item"><span class="stat-value" id="statLive">-</span><span class="stat-label">🔥 Live</span></div>
-      <div class="stat-item"><span class="stat-value" id="statLikes">-</span><span class="stat-label">Total Likes</span></div>
+    <div class="stats-bar" id="statsBar">
+      <div class="stat-item"><span class="stat-value" id="statModels">-</span><span class="stat-label">Models</span></div>
+      <div class="stat-item"><span class="stat-value" id="statLive">-</span><span class="stat-label">Live</span></div>
+      <div class="stat-item"><span class="stat-value" id="statLikes">-</span><span class="stat-label">Likes</span></div>
       <div class="stat-item"><span class="stat-value" id="statInferences">-</span><span class="stat-label">Inferences</span></div>
     </div>
-
-    <div class="filters">
-      <input type="text" id="search" placeholder="🔍 Search models...">
-      <select id="category">
-        <option value="all">All Categories</option>
-        <option value="DeFi">DeFi</option>
-        <option value="Language">Language</option>
-        <option value="Risk">Risk</option>
-      </select>
-    </div>
-
     <div class="grid" id="grid"></div>
   </div>
 
   <div class="modal" id="chatModal">
     <div class="modal-content">
-      <div class="modal-header">
-        <h3 id="chatTitle">Model Details</h3>
-        <button class="modal-close" onclick="closeModal()">&times;</button>
-      </div>
+      <h3 id="chatTitle">Model Chat</h3>
       <div class="chat-layout">
         <div>
-          <div class="messages" id="chatMsgs"></div>
-          <div class="input-area" style="display:flex; gap:10px;">
-            <input type="text" id="chatInput" style="flex:1; padding:12px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--border); color:white;" placeholder="Ask about this model...">
-            <button class="btn btn-primary" style="flex:none; width:100px;" onclick="sendChat()">Send</button>
+          <div class="messages" id="chatMsgs" style="display:flex; flex-direction:column;"></div>
+          <div style="display:flex; gap:10px;">
+            <input type="text" id="chatInput" style="flex:1; padding:12px; border-radius:8px; background:#0f172a; border:1px solid var(--border); color:white;" placeholder="Type a message...">
+            <button class="btn btn-primary" style="width:100px;" onclick="sendChat()">Send</button>
           </div>
         </div>
-        <div class="model-sidebar">
-          <div id="chatSidebar"></div>
-          <hr style="margin:20px 0; border:0; border-top:1px solid var(--border);">
-          <strong>📄 Technical Config (JSON)</strong>
-          <pre id="rawCodeBlock"></pre>
-          <button class="btn btn-secondary" style="width:100%; margin-top:10px; font-size:12px;" onclick="copyRawJSON()">📋 Copy Config</button>
-        </div>
+        <div style="font-size:13px; color:var(--text-secondary);" id="chatSidebar"></div>
       </div>
-    </div>
-  </div>
-
-  <div class="modal" id="createModal">
-    <div class="modal-content" style="max-width:600px;">
-      <div class="modal-header"><h3>🛠 Create / Fork Model</h3><button class="modal-close" onclick="closeCreate()">&times;</button></div>
-      <form id="createForm" onsubmit="doCreate(event)">
-        <div style="margin-bottom:15px;">
-          <label style="display:block; margin-bottom:5px; font-size:13px; color:var(--text-secondary);">Model Name</label>
-          <input type="text" id="cName" style="width:100%; padding:12px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--border); color:white;" required>
-        </div>
-        <div style="margin-bottom:15px;">
-          <label style="display:block; margin-bottom:5px; font-size:13px; color:var(--text-secondary);">Description</label>
-          <textarea id="cDesc" style="width:100%; padding:12px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--border); color:white; min-height:100px;" required></textarea>
-        </div>
-        <input type="hidden" id="cBase">
-        <button type="submit" id="createBtn" class="btn btn-primary" style="width:100%;">→ Deploy to Catalog</button>
-      </form>
-      <div id="cStatus" style="margin-top:20px; padding:15px; border-radius:8px; background:rgba(6,182,212,0.1); display:none; font-size:13px;"></div>
+      <button class="btn btn-secondary" style="margin-top:20px;" onclick="closeModal()">Close</button>
     </div>
   </div>
 
   <script>
-    const API = window.location.origin; // Работает автоматически на Render
+    const API = window.location.origin;
     let curModel = null;
 
     async function load() {
-      const s = document.getElementById('search').value;
-      const c = document.getElementById('category').value;
-      const url = new URL(`${API}/api/models`);
-      if(s) url.searchParams.append('search', s);
-      if(c !== 'all') url.searchParams.append('category', c);
-
-      try {
-        const r = await fetch(url);
-        const models = await r.json();
-        document.getElementById('grid').innerHTML = models.map(m => `
-          <div class="card">
-            <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
-              <strong style="font-size:1.1rem;">${m.name}</strong>
-              ${m.is_live ? '<span class="badge badge-live">LIVE</span>' : '<span class="badge">BASE</span>'}
-            </div>
-            <p style="font-size:13px; color:var(--text-secondary); margin-bottom:15px; height:40px; overflow:hidden;">${m.description}</p>
-            <div style="display:flex; gap:15px; font-size:12px; color:var(--primary-light);">
-              <span>⭐ ${m.stats?.likes || 0}</span>
-              <span>🔄 ${m.stats?.inferences || 0}</span>
-              <span style="margin-left:auto; opacity:0.7;">${m.category}</span>
-            </div>
-            <div class="buttons">
-              <button class="btn btn-primary" onclick="openChat('${m.id}')">💬 Details</button>
-              <button class="btn btn-secondary" onclick="openCreate('${m.id}')">🛠 Fork</button>
-            </div>
+      const r = await fetch(`${API}/api/models`);
+      const models = await r.json();
+      document.getElementById('grid').innerHTML = models.map(m => `
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+            <strong>${m.name}</strong>
+            <span class="badge ${m.is_live ? 'badge-live' : ''}">${m.is_live ? 'LIVE' : 'BASE'}</span>
           </div>
-        `).join('');
-      } catch(e) { console.error(e); }
+          <p style="font-size:13px; color:var(--text-secondary); min-height:40px;">${m.description}</p>
+          <div class="buttons">
+            <button class="btn btn-primary" onclick="openChat('${m.id}')">💬 Chat</button>
+            <button class="btn btn-secondary" onclick="window.open('https://hub.opengradient.ai/models/${m.id.replace('-','/')}', '_blank')">🔗 View</button>
+          </div>
+        </div>
+      `).join('');
     }
 
     async function openChat(id) {
       curModel = id;
       const r = await fetch(`${API}/api/models/${id}`);
       const m = await r.json();
-      
       document.getElementById('chatTitle').textContent = m.name;
-      document.getElementById('chatSidebar').innerHTML = `
-        <p><strong>ID:</strong> ${m.id}</p>
-        <p><strong>Category:</strong> ${m.category}</p>
-        <p style="margin-top:10px;">${m.description}</p>
-      `;
-      
-      // Показываем RAW данные для копирования
-      document.getElementById('rawCodeBlock').textContent = JSON.stringify(m.raw_data || m, null, 2);
-      document.getElementById('chatMsgs').innerHTML = '<div class="message bot">Hello! I am an AI assistant for this model. How can I help you?</div>';
+      document.getElementById('chatSidebar').innerHTML = `<strong>ID:</strong> ${m.id}<br><br>${m.description}`;
+      document.getElementById('chatMsgs').innerHTML = '<div class="message bot">System: Connection to OpenGradient Node established. How can I assist with this model?</div>';
       document.getElementById('chatModal').classList.add('active');
     }
 
-    async function openCreate(baseId) {
-      const r = await fetch(`${API}/api/models/${baseId}`);
-      const m = await r.json();
-      
-      document.getElementById('cName').value = `fork-${m.name}`;
-      document.getElementById('cDesc').value = `Forked from ${m.id}\n---\n${m.description}`;
-      document.getElementById('cBase').value = m.id;
-      document.getElementById('createModal').classList.add('active');
-    }
+    async function sendChat() {
+      const input = document.getElementById('chatInput');
+      const msg = input.value.trim();
+      if(!msg || !curModel) return;
 
-    function copyRawJSON() {
-      const code = document.getElementById('rawCodeBlock').textContent;
-      navigator.clipboard.writeText(code);
-      const btn = event.target;
-      btn.textContent = '✅ Copied!';
-      setTimeout(() => btn.textContent = '📋 Copy Config', 2000);
-    }
-
-    async function doCreate(e) {
-      e.preventDefault();
-      const btn = document.getElementById('createBtn');
-      const st = document.getElementById('cStatus');
-      btn.disabled = true;
-      st.style.display = 'block';
-      st.textContent = '🚀 Deploying model to database...';
-
-      const body = {
-        name: document.getElementById('cName').value,
-        description: document.getElementById('cDesc').value,
-        category: 'User',
-        base_model: document.getElementById('cBase').value
-      };
+      const chatMsgs = document.getElementById('chatMsgs');
+      chatMsgs.innerHTML += `<div class="message user">${msg}</div>`;
+      input.value = '';
+      chatMsgs.scrollTop = chatMsgs.scrollHeight;
 
       try {
-        const r = await fetch(`${API}/api/models/create`, {
+        const r = await fetch(`${API}/api/chat`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(body)
+          body: JSON.stringify({ model_id: curModel, message: msg })
         });
         const res = await r.json();
-        st.textContent = `✅ Successfully created: ${res.result.model_id}`;
-        setTimeout(() => { closeCreate(); load(); }, 1500);
-      } catch(e) {
-        st.textContent = '❌ Error creating model';
-        btn.disabled = false;
-      }
+        chatMsgs.innerHTML += `<div class="message bot">${res.reply}</div>`;
+        chatMsgs.scrollTop = chatMsgs.scrollHeight;
+      } catch(e) { console.error(e); }
     }
 
     async function loadStats() {
@@ -223,17 +126,14 @@
       document.getElementById('statLive').textContent = s.live_models;
       document.getElementById('statLikes').textContent = s.total_likes;
       document.getElementById('statInferences').textContent = s.total_inferences;
-      
-      if(s.last_sync) {
-        document.getElementById('syncStatus').textContent = `🔄 Last Hub Sync: ${new Date(s.last_sync).toLocaleString()}`;
-      }
+      if(s.last_sync) document.getElementById('syncStatus').textContent = `Last Hub Sync: ${new Date(s.last_sync).toLocaleString()}`;
     }
 
     function closeModal() { document.getElementById('chatModal').classList.remove('active'); }
-    function closeCreate() { document.getElementById('createModal').classList.remove('active'); }
+    
+    document.getElementById('chatInput').addEventListener('keypress', (e) => { if(e.key === 'Enter') sendChat(); });
 
     load(); loadStats();
-    setInterval(loadStats, 30000);
   </script>
 </body>
 </html>
