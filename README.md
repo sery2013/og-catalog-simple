@@ -15,7 +15,7 @@
 
 ### 🐳 Deployment
 - **Dockerfile**: Containerized setup for consistent deployment
-- **Railway Compatible**: Runs on `*.up.railway.app`
+- **Render Compatible**: Runs on `*.up.Render.app`
 - **Dependencies**: `requirements.txt` with FastAPI, httpx, SQLAlchemy
 
 ### 🔗 Integration Ready
